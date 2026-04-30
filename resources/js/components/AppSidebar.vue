@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Link } from '@inertiajs/vue3';
-import { BookOpen, FolderGit2, LayoutGrid } from 'lucide-vue-next';
+import { BookOpen, FolderGit2, LayoutGrid, Users, CreditCard, BarChart3, FileText, Package } from 'lucide-vue-next';
 import AppLogo from '@/components/AppLogo.vue';
 import NavFooter from '@/components/NavFooter.vue';
 import NavMain from '@/components/NavMain.vue';
@@ -15,13 +15,41 @@ import {
     SidebarMenuItem,
 } from '@/components/ui/sidebar';
 import { dashboard } from '@/routes';
+import customerRoutes from '@/routes/customers';
+import loanRoutes from '@/routes/loans';
+import reportRoutes from '@/routes/reports';
 import type { NavItem } from '@/types';
 
 const mainNavItems: NavItem[] = [
     {
         title: 'Dashboard',
-        href: dashboard(),
+        href: dashboard().url,
         icon: LayoutGrid,
+    },
+    {
+        title: 'Clientes',
+        href: customerRoutes.index().url,
+        icon: Users,
+    },
+    {
+        title: 'Préstamos',
+        href: loanRoutes.index().url,
+        icon: CreditCard,
+    },
+    {
+        title: 'Métricas',
+        href: reportRoutes.index().url,
+        icon: BarChart3,
+    },
+    {
+        title: 'Catálogo',
+        href: '/loan-products',
+        icon: Package,
+    },
+    {
+        title: 'Reportes',
+        href: '/centro-reportes',
+        icon: FileText,
     },
 ];
 
