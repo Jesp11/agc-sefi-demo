@@ -3,7 +3,7 @@ import { Head, useForm, Link } from '@inertiajs/vue3';
 import { ArrowLeft, Save, ChevronDown } from 'lucide-vue-next';
 import { dashboard as dashboardRoute } from '@/routes';
 import AppLayout from '@/layouts/AppLayout.vue';
-import SearchableSelect from '@/Components/SearchableSelect.vue';
+import SearchableSelect from '@/components/SearchableSelect.vue';
 import type { BreadcrumbItem } from '@/types';
 
 interface Asesor {

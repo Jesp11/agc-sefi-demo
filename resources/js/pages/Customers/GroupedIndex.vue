@@ -9,7 +9,7 @@ import { dashboard as dashboardRoute } from '@/routes';
 import customersRoutes from '@/routes/customers';
 import type { BreadcrumbItem } from '@/types';
 import AppLayout from '@/layouts/AppLayout.vue';
-import SearchableSelect from '@/Components/SearchableSelect.vue';
+import SearchableSelect from '@/components/SearchableSelect.vue';
 
 interface Direccion {
     id_direccion?: number;

@@ -11,7 +11,7 @@ import loanRoutes from '@/routes/loans';
 import paymentRoutes from '@/routes/payments';
 import type { BreadcrumbItem } from '@/types';
 import AppLayout from '@/layouts/AppLayout.vue';
-import SearchableSelect from '@/Components/SearchableSelect.vue';
+import SearchableSelect from '@/components/SearchableSelect.vue';
 import { router } from '@inertiajs/vue3';
 import { watch } from 'vue';
 
