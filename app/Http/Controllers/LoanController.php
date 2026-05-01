@@ -16,13 +16,16 @@ class LoanController extends Controller
 {
     public function index(Request $request)
     {
+        $fromDate = $request->query('from_date', Carbon::today()->format('Y-m-d'));
+        $toDate = $request->query('to_date', Carbon::today()->format('Y-m-d'));
+
         // Get the latest loan ID for each customer to work with active/recent cycles
         $latestLoanIds = Credito::select(DB::raw('MAX(id_credito) as id'))
             ->groupBy('id_cliente')
             ->pluck('id');
 
         $baseQuery = Credito::whereIn('id_credito', $latestLoanIds)
-            ->with(['cliente', 'asesor'])
+            ->with(['cliente.grupo', 'asesor'])
             ->withSum('pagos', 'monto');
 
         $query = clone $baseQuery;
@@ -49,86 +52,106 @@ class LoanController extends Controller
             }
         }
 
-        if ($fromDate = $request->query('from_date')) {
-            $query->whereDate('fecha', '>=', $fromDate);
+        $allLoans = (clone $query)->get();
+
+        // Calculate days in range to filter loans
+        $start = Carbon::parse($fromDate);
+        $end = Carbon::parse($toDate);
+        $daysInRange = [];
+        $current = $start->copy();
+        while ($current <= $end) {
+            $daysInRange[] = $current->dayOfWeek;
+            $current->addDay();
+            if (count($daysInRange) >= 7) break; // Optimization: all days included
         }
 
-        if ($toDate = $request->query('to_date')) {
-            $query->whereDate('fecha', '<=', $toDate);
-        }
+        // Filter loans that have a payment due in the date range
+        $filteredLoans = $allLoans->filter(function($l) use ($daysInRange) {
+            $loanDay = Carbon::parse($l->fecha)->dayOfWeek;
+            return in_array($loanDay, $daysInRange);
+        });
 
-        // Calculate statistics based on FILTERED results
-        $filteredLoans = (clone $query)->get();
         $loanIds = $filteredLoans->pluck('id_credito');
 
-        // Total payments made in the selected period for the filtered loans
-        $paymentsInPeriod = Pago::whereIn('id_credito', $loanIds);
-        if ($fromDate) $paymentsInPeriod->whereDate('fecha_pago', '>=', $fromDate);
-        if ($toDate) $paymentsInPeriod->whereDate('fecha_pago', '<=', $toDate);
-        $totalCobradoPeriodo = $paymentsInPeriod->sum('monto');
+        // Fetch all payments for these loans to process in memory
+        $allPaymentsForLoans = Pago::whereIn('id_credito', $loanIds)->get();
+        
+        // Payments specifically made within the selected range (for stats)
+        $paymentsInPeriod = $allPaymentsForLoans->filter(function($p) use ($fromDate, $toDate) {
+            $pDate = Carbon::parse($p->fecha_pago)->format('Y-m-d');
+            return $pDate >= $fromDate && $pDate <= $toDate;
+        });
 
-        // Calculate Collection Goal (Meta) based on payment days in the range
-        $metaCobranza = 0;
-        if ($fromDate && $toDate) {
-            $start = Carbon::parse($fromDate);
-            $end = Carbon::parse($toDate);
-            $daysInRange = [];
-            $current = $start->copy();
-            while ($current <= $end) {
-                $daysInRange[] = $current->dayOfWeek;
-                $current->addDay();
-                if (count($daysInRange) >= 7) break; // Optimization: all days included
+        $totalCobradoPeriodo = $paymentsInPeriod->sum('monto');
+        
+        // Calculate meta and mapped loans
+        $mappedLoans = $filteredLoans->map(function($loan) use ($toDate) {
+            $days = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+            $dia_pago = $loan->fecha ? $days[Carbon::parse($loan->fecha)->dayOfWeek] : 'N/A';
+            
+            $pagado = $loan->pagos_sum_monto ?? 0;
+            $completado = $pagado >= $loan->total;
+
+            // Logical check: Is the installment for this period already covered?
+            // We calculate how many weeks have passed since the start until the filtered 'toDate'
+            $startDate = Carbon::parse($loan->fecha);
+            $targetDate = Carbon::parse($toDate);
+            
+            // If the target date is before the start date, it's not due yet
+            if ($targetDate->lt($startDate)) {
+                $cobradoEnPeriodo = true; // Or perhaps hide it, but for now we mark as "handled"
+            } else {
+                $weeksPassed = floor($startDate->diffInDays($targetDate) / 7);
+                // The installment for 'today' (targetDate) is covered if total paid is at least $weeksPassed * valor_ficha
+                $expectedAmountByNow = $weeksPassed * $loan->valor_ficha;
+                
+                $cobradoEnPeriodo = $pagado >= $expectedAmountByNow;
             }
 
-            $metaCobranza = $filteredLoans->filter(function($l) use ($daysInRange) {
-                // Loan is active (not fully paid)
-                $is_active = ($l->pagos_sum_monto ?? 0) < $l->total;
-                if (!$is_active) return false;
-                
-                // Payment day (dayOfWeek of start date) is in the range
-                $loanDay = Carbon::parse($l->fecha)->dayOfWeek;
-                return in_array($loanDay, $daysInRange);
-            })->sum('valor_ficha');
-        } else {
-            // Default: Total pending balance if no date filter
-            $metaCobranza = $filteredLoans->sum(fn($l) => $l->total - ($l->pagos_sum_monto ?? 0));
-        }
+            return [
+                'id' => $loan->id_credito,
+                'customer' => $loan->cliente,
+                'grupo' => $loan->cliente && $loan->cliente->grupo ? $loan->cliente->grupo->nombre : null,
+                'amount' => $loan->monto_otorgado,
+                'interes' => $loan->interes,
+                'valor_ficha' => $loan->valor_ficha,
+                'total' => $loan->total,
+                'pagado' => $pagado,
+                'pendiente' => max(0, $loan->total - $pagado),
+                'completado' => $completado,
+                'cobrado_en_periodo' => $cobradoEnPeriodo || $completado,
+                'fecha' => $loan->fecha ? Carbon::parse($loan->fecha)->format('d/m/Y') : 'N/A',
+                'dia_pago' => $dia_pago,
+                'ciclo' => $loan->ciclo,
+                'plazo' => $loan->plazo,
+                'asesor' => $loan->asesor ? $loan->asesor->nombre : 'Sin asesor',
+            ];
+        });
+
+        // Re-calculate stats based on mapped loans
+        $metaCobranza = $mappedLoans->filter(fn($l) => !$l['cobrado_en_periodo'])->sum('valor_ficha');
 
         $stats = [
             'total_cartera' => $filteredLoans->sum('total'),
-            'total_cobrado' => $fromDate || $toDate ? $totalCobradoPeriodo : $filteredLoans->sum('pagos_sum_monto'),
-            'total_pendiente' => $fromDate || $toDate ? max(0, $metaCobranza - $totalCobradoPeriodo) : $filteredLoans->sum(fn($l) => $l->total - ($l->pagos_sum_monto ?? 0)),
-            'clientes_activos' => $filteredLoans->filter(fn($l) => ($l->pagos_sum_monto ?? 0) < $l->total)->count(),
-            'meta_periodo' => $metaCobranza,
+            'total_cobrado' => $totalCobradoPeriodo,
+            'total_pendiente' => $metaCobranza,
+            'clientes_activos' => $mappedLoans->filter(fn($l) => !$l['completado'])->count(),
+            'meta_periodo' => $metaCobranza + $totalCobradoPeriodo,
         ];
 
-        return Inertia::render('Loans/Index', [
-            'loans' => $query->orderBy('id_credito', 'desc')->get()->map(function($loan) {
-                $days = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
-                $dia_pago = $loan->fecha ? $days[Carbon::parse($loan->fecha)->dayOfWeek] : 'N/A';
-                
-                $pagado = $loan->pagos_sum_monto ?? 0;
-                $completado = $pagado >= $loan->total;
+        // Sort loans so that those with groups appear grouped together and alphabetically by group name
+        $sortedLoans = $mappedLoans->sortBy(function($loan) {
+            return $loan['grupo'] ? $loan['grupo'] : 'ZZZZZZZZ';
+        })->values();
 
-                return [
-                    'id' => $loan->id_credito,
-                    'customer' => $loan->cliente,
-                    'amount' => $loan->monto_otorgado,
-                    'interes' => $loan->interes,
-                    'valor_ficha' => $loan->valor_ficha,
-                    'total' => $loan->total,
-                    'pagado' => $pagado,
-                    'completado' => $completado,
-                    'fecha' => $loan->fecha ? Carbon::parse($loan->fecha)->format('d/m/Y') : 'N/A',
-                    'dia_pago' => $dia_pago,
-                    'ciclo' => $loan->ciclo,
-                    'plazo' => $loan->plazo,
-                    'asesor' => $loan->asesor ? $loan->asesor->nombre : 'Sin asesor',
-                ];
-            }),
+        return Inertia::render('Loans/Index', [
+            'loans' => $sortedLoans,
             'stats' => $stats,
             'asesores' => Asesor::orderBy('nombre')->get(['id_asesor', 'nombre']),
-            'filters' => $request->only(['search', 'id_asesor', 'status', 'from_date', 'to_date'])
+            'filters' => array_merge($request->only(['search', 'id_asesor', 'status']), [
+                'from_date' => $fromDate,
+                'to_date' => $toDate
+            ])
         ]);
     }
 

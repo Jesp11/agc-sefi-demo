@@ -34,6 +34,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     Route::resource('loan-products', LoanProductController::class)->except(['show', 'create', 'edit']);
 
+    Route::post('/payments/bulk', [PaymentController::class, 'storeBulk'])->name('payments.storeBulk');
     Route::post('/payments', [PaymentController::class, 'store'])->name('payments.store');
 
     // Route::get('/centro-reportes', [ReportController::class, 'center'])->name('reports.center');
@@ -45,6 +46,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     // Groups
     Route::resource('grupos', GrupoController::class);
+    Route::get('/grupos/{grupo}/create-loans', [GrupoController::class, 'createLoans'])->name('grupos.create-loans');
+    Route::post('/grupos/{grupo}/store-loans', [GrupoController::class, 'storeLoans'])->name('grupos.store-loans');
     Route::post('/grupos/{grupo}/add-client', [GrupoController::class, 'addClient'])->name('grupos.add-client');
     Route::delete('/grupos/{grupo}/remove-client/{cliente}', [GrupoController::class, 'removeClient'])->name('grupos.remove-client');
     Route::get('/savings', [SavingsController::class, 'index'])->name('savings.index');

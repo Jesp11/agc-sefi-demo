@@ -24,4 +24,22 @@ class PaymentController extends Controller
             return redirect()->back()->with('success', 'Pago registrado correctamente.');
         });
     }
+
+    public function storeBulk(Request $request)
+    {
+        $validated = $request->validate([
+            'payments' => 'required|array',
+            'payments.*.id_credito' => 'required|exists:creditos,id_credito',
+            'payments.*.monto' => 'required|numeric|min:0.01',
+            'payments.*.fecha_pago' => 'required|date',
+        ]);
+
+        return DB::transaction(function () use ($validated) {
+            foreach ($validated['payments'] as $payment) {
+                Pago::create($payment);
+            }
+
+            return redirect()->back()->with('success', 'Pagos registrados correctamente.');
+        });
+    }
 }

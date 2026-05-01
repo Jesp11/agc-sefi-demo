@@ -3,10 +3,11 @@ import { ref, computed } from 'vue';
 import { Head, Link } from '@inertiajs/vue3';
 import { 
     UserPlus, Search, Download, 
-    Phone, ChevronRight
+    Phone, ChevronRight, Plus
 } from 'lucide-vue-next';
 import { dashboard as dashboardRoute } from '@/routes';
 import customersRoutes from '@/routes/customers';
+import loanRoutes from '@/routes/loans';
 import type { BreadcrumbItem } from '@/types';
 import AppLayout from '@/layouts/AppLayout.vue';
 

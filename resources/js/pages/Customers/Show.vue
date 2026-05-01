@@ -2,10 +2,12 @@
 import { Head, Link } from '@inertiajs/vue3';
 import { 
     ArrowLeft, Phone, User, MapPin, Users, ShieldCheck, 
-    Calendar, Landmark, History, FileText, ChevronRight, UserCheck
+    Calendar, Landmark, History, FileText, ChevronRight, UserCheck, Plus
 } from 'lucide-vue-next';
+import { computed } from 'vue';
 import { dashboard as dashboardRoute } from '@/routes';
 import customersRoutes from '@/routes/customers';
+import loanRoutes from '@/routes/loans';
 import type { BreadcrumbItem } from '@/types';
 import AppLayout from '@/layouts/AppLayout.vue';
 
@@ -46,6 +48,7 @@ interface Credito {
 const props = defineProps<{
     customer: {
         id_cliente: number;
+        id_grupo: number | null;
         nombre: string;
         curp: string;
         clave_elector: string;
@@ -71,6 +74,13 @@ const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Clientes', href: customersRoutes.index().url },
     { title: props.customer?.nombre || 'Expediente', href: '#' },
 ];
+
+const latestLoan = computed(() => {
+    if (props.customer?.creditos?.length) {
+        return props.customer.creditos.reduce((max, loan) => max.id_credito > loan.id_credito ? max : loan);
+    }
+    return null;
+});
 </script>
 
 <template>
@@ -95,6 +105,24 @@ const breadcrumbs: BreadcrumbItem[] = [
                         </div>
                     </div>
                     <div class="flex gap-4" v-if="customer">
+                        <template v-if="!customer.id_grupo">
+                            <Link 
+                                v-if="latestLoan"
+                                :href="`/loans/${latestLoan.id_credito}`"
+                                class="px-6 py-2.5 bg-emerald-600 text-white text-xs font-bold rounded-lg hover:bg-emerald-700 transition-all shadow-sm flex items-center gap-2"
+                            >
+                                <FileText :size="16" />
+                                Ver Préstamo
+                            </Link>
+                            <Link 
+                                v-else
+                                :href="loanRoutes.create().url + '?id_cliente=' + customer.id_cliente"
+                                class="px-6 py-2.5 bg-emerald-600 text-white text-xs font-bold rounded-lg hover:bg-emerald-700 transition-all shadow-sm flex items-center gap-2"
+                            >
+                                <Plus :size="16" />
+                                Nuevo Préstamo
+                            </Link>
+                        </template>
                         <Link 
                             :href="customersRoutes.edit({ customer: customer.id_cliente }).url"
                             class="px-6 py-2.5 bg-slate-900 text-white text-xs font-bold rounded-lg hover:bg-slate-800 transition-all shadow-sm"

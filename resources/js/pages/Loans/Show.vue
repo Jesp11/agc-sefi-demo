@@ -46,8 +46,13 @@ const paymentForm = useForm({
     fecha_pago: today,
 });
 
-const openPaymentModal = (amount: string = '') => {
+const openPaymentModal = (amount: string = '', date: string | null = null) => {
     paymentForm.monto = amount;
+    if (date) {
+        paymentForm.fecha_pago = date;
+    } else {
+        paymentForm.fecha_pago = today;
+    }
     showPaymentModal.value = true;
 };
 
@@ -97,6 +102,7 @@ const installments = computed(() => {
         table.push({
             number: i,
             date: dueDate.toLocaleDateString('es-MX', { day: '2-digit', month: '2-digit', year: 'numeric' }),
+            db_date: dueDate.toISOString().split('T')[0],
             amount: installmentAmount,
             paid: paidOnThisInstallment,
             pending: pendingAmount,
@@ -272,7 +278,7 @@ const breadcrumbs: BreadcrumbItem[] = [
                                     <td class="px-6 py-4 text-right">
                                         <button 
                                             v-if="inst.status !== 'paid' && progressPercent < 100"
-                                            @click="openPaymentModal(inst.pending.toString())"
+                                            @click="openPaymentModal(inst.pending.toString(), inst.db_date)"
                                             class="text-[10px] font-bold text-slate-900 hover:underline"
                                         >
                                             {{ inst.status === 'partial' ? 'Completar' : 'Cobrar' }}

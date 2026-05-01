@@ -3,7 +3,7 @@ import { ref, computed } from 'vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { 
     Users2, Search, Plus, 
-    ChevronRight, Trash2, Edit2,
+    ChevronRight,
     User
 } from 'lucide-vue-next';
 import { dashboard as dashboardRoute } from '@/routes';
@@ -37,11 +37,7 @@ const filteredGrupos = computed(() => {
     );
 });
 
-const deleteGrupo = (id: number) => {
-    if (confirm('¿Está seguro de eliminar este grupo?')) {
-        router.delete(`/grupos/${id}`);
-    }
-};
+
 </script>
 
 <template>
@@ -115,20 +111,7 @@ const deleteGrupo = (id: number) => {
                             </td>
                             <td class="px-6 py-5 text-right">
                                 <div class="flex items-center justify-end gap-2">
-                                    <Link 
-                                        :href="`/grupos/${grupo.id}/edit`"
-                                        class="p-2 text-slate-400 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-all"
-                                        title="Editar Grupo"
-                                    >
-                                        <Edit2 :size="16" />
-                                    </Link>
-                                    <button 
-                                        @click="deleteGrupo(grupo.id)"
-                                        class="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all"
-                                        title="Eliminar Grupo"
-                                    >
-                                        <Trash2 :size="16" />
-                                    </button>
+
                                     <Link 
                                         :href="`/grupos/${grupo.id}`"
                                         class="px-4 py-2 bg-slate-900 text-white text-[10px] font-bold uppercase tracking-widest rounded-lg hover:bg-slate-800 transition-all shadow-sm"

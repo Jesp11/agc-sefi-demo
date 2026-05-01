@@ -2,17 +2,31 @@
 import { ref, computed } from 'vue';
 import { Head, Link, useForm } from '@inertiajs/vue3';
 import { 
-    Users2, ArrowLeft, UserPlus, Trash2, 
-    Search, User, CreditCard, ChevronRight
+    Search, User, ArrowLeft, UserPlus, Users2,
+    Phone, CheckCircle2, Calendar, FileText, Star,
+    TrendingUp, ArrowDownCircle, ArrowUpCircle, Banknote
 } from 'lucide-vue-next';
 import { dashboard as dashboardRoute } from '@/routes';
 import AppLayout from '@/layouts/AppLayout.vue';
 import type { BreadcrumbItem } from '@/types';
 
 interface Member {
-    id: number;
+    id_cliente: number;
     nombre: string;
-    creditos_count: number;
+    telefono: string;
+    latest_loan?: {
+        id: number;
+        amount: number;
+        interes: number;
+        valor_ficha: number;
+        total: number;
+        pagado: number;
+        completado: boolean;
+        fecha: string;
+        dia_pago: string;
+        plazo: number;
+        asesor: string;
+    } | null;
 }
 
 interface AvailableClient {
@@ -24,6 +38,7 @@ interface Grupo {
     id: number;
     nombre: string;
     asesor: string;
+    id_responsable?: number | null;
     clientes: Member[];
 }
 
@@ -53,6 +68,13 @@ const form = useForm({
     id_cliente: null as number | null,
 });
 
+const formatCurrency = (value: number) => {
+    return new Intl.NumberFormat('es-MX', {
+        style: 'currency',
+        currency: 'MXN',
+    }).format(value);
+};
+
 const addClient = (clientId: number) => {
     form.id_cliente = clientId;
     form.post(`/grupos/${props.grupo.id}/add-client`, {
@@ -63,11 +85,33 @@ const addClient = (clientId: number) => {
     });
 };
 
-const removeClient = (clientId: number) => {
-    if (confirm('¿Está seguro de remover a este cliente del grupo? Volverá a la cartera individual.')) {
-        useForm({}).delete(`/grupos/${props.grupo.id}/remove-client/${clientId}`);
-    }
-};
+const groupStats = computed(() => {
+    let prestado = 0;
+    let recuperado = 0;
+    let total = 0;
+    let ganancia = 0;
+
+    props.grupo.clientes.forEach(c => {
+        if (c.latest_loan) {
+            prestado += c.latest_loan.amount || 0;
+            total += c.latest_loan.total || 0;
+            recuperado += c.latest_loan.pagado || 0;
+            ganancia += Math.max(0, (c.latest_loan.pagado || 0) - (c.latest_loan.amount || 0));
+        }
+    });
+
+    return {
+        prestado,
+        recuperado,
+        porRecuperar: Math.max(0, total - recuperado),
+        ganancia
+    };
+});
+
+const hasActiveLoan = computed(() => {
+    return props.grupo.clientes.some(c => c.latest_loan && !c.latest_loan.completado);
+});
+
 </script>
 
 <template>
@@ -76,17 +120,18 @@ const removeClient = (clientId: number) => {
     <AppLayout :breadcrumbs="breadcrumbs">
         <div class="w-full mx-auto p-8 lg:p-12">
             
-            <!-- Header -->
-            <header class="flex items-center justify-between gap-8 mb-12">
-                <div class="flex items-center gap-6">
+            <!-- Professional Header -->
+            <header class="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-16 pb-8 border-b border-slate-200">
+                <div class="flex items-start gap-6">
                     <Link 
                         href="/grupos"
-                        class="p-2.5 bg-white border border-slate-200 rounded-xl text-slate-400 hover:text-slate-900 transition-all shadow-sm active:scale-95"
+                        class="mt-2 p-2.5 bg-white border border-slate-200 rounded-xl text-slate-400 hover:text-slate-900 transition-all shadow-sm active:scale-95"
                     >
                         <ArrowLeft :size="20" />
                     </Link>
                     <div>
-                        <h1 class="text-3xl font-bold text-slate-900 tracking-tight">{{ grupo.nombre }}</h1>
+                        <p class="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1">Detalle de Grupo de Clientes</p>
+                        <h1 class="text-4xl font-bold text-slate-900 tracking-tight">{{ grupo.nombre }}</h1>
                         <p class="text-sm text-slate-500 font-medium mt-1 flex items-center gap-2">
                             <User :size="14" class="text-slate-300" />
                             Asesor Asignado: <span class="text-slate-900 font-bold">{{ grupo.asesor }}</span>
@@ -94,59 +139,171 @@ const removeClient = (clientId: number) => {
                     </div>
                 </div>
 
-                <Link 
-                    :href="`/customers/create?id_grupo=${grupo.id}`"
-                    class="px-6 py-2.5 bg-slate-900 text-white font-bold rounded-lg hover:bg-slate-800 transition-all text-xs shadow-sm active:scale-95 flex items-center gap-2"
-                >
-                    <UserPlus :size="16" />
-                    Añadir Integrante
-                </Link>
+                <div class="flex items-center gap-3">
+                    <button 
+                        v-if="hasActiveLoan"
+                        disabled
+                        class="px-6 py-2.5 bg-slate-200 text-slate-400 font-bold rounded-lg cursor-not-allowed text-xs flex items-center gap-2 border border-slate-200"
+                        title="El grupo ya tiene un préstamo activo"
+                    >
+                        <FileText :size="16" />
+                        Préstamo Activo
+                    </button>
+                    <Link 
+                        v-else
+                        :href="`/grupos/${grupo.id}/create-loans`"
+                        class="px-6 py-2.5 bg-emerald-600 text-white font-bold rounded-lg hover:bg-emerald-700 transition-all text-xs shadow-sm active:scale-95 flex items-center gap-2"
+                        :class="{ 'opacity-50 pointer-events-none': grupo.clientes.length === 0 }"
+                    >
+                        <FileText :size="16" />
+                        Crear Préstamos
+                    </Link>
+                    <Link 
+                        :href="`/customers/create?id_grupo=${grupo.id}`"
+                        class="px-6 py-2.5 bg-slate-900 text-white font-bold rounded-lg hover:bg-slate-800 transition-all text-xs shadow-sm active:scale-95 flex items-center gap-2"
+                    >
+                        <UserPlus :size="16" />
+                        Añadir Integrante
+                    </Link>
+                </div>
             </header>
 
-            <!-- Integrantes Table -->
-            <div class="bg-white border border-slate-100 rounded-xl shadow-sm overflow-hidden min-h-[400px]">
-                <table class="w-full text-left border-collapse">
+            <!-- Statistics Cards -->
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-12">
+                <div class="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-all">
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="p-2 bg-blue-50 text-blue-600 rounded-lg">
+                            <TrendingUp :size="18" />
+                        </div>
+                        <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Total Prestado</span>
+                    </div>
+                    <div class="text-2xl font-black text-blue-600">{{ formatCurrency(groupStats.prestado) }}</div>
+                </div>
+
+                <div class="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-all">
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="p-2 bg-emerald-50 text-emerald-600 rounded-lg">
+                            <ArrowDownCircle :size="18" />
+                        </div>
+                        <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Total Recuperado</span>
+                    </div>
+                    <div class="text-2xl font-black text-emerald-600">{{ formatCurrency(groupStats.recuperado) }}</div>
+                </div>
+
+                <div class="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-all">
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="p-2 bg-amber-50 text-amber-600 rounded-lg">
+                            <ArrowUpCircle :size="18" />
+                        </div>
+                        <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Por Recuperar</span>
+                    </div>
+                    <div class="text-2xl font-black text-amber-600">{{ formatCurrency(groupStats.porRecuperar) }}</div>
+                </div>
+
+                <div class="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-all">
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="p-2 bg-purple-50 text-purple-600 rounded-lg">
+                            <Banknote :size="18" />
+                        </div>
+                        <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Ganancia Real</span>
+                    </div>
+                    <div class="text-2xl font-black text-purple-600">{{ formatCurrency(groupStats.ganancia) }}</div>
+                </div>
+            </div>
+
+            <!-- Integrantes Table (Igual a Cartera Individual) -->
+            <div class="bg-white border border-slate-100 rounded-xl shadow-sm overflow-x-auto min-h-[500px]">
+                <table class="w-full text-left border-collapse table-auto">
                     <thead>
                         <tr class="bg-slate-50/50 border-b border-slate-100">
-                            <th class="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Integrante del Grupo</th>
-                            <th class="w-48 px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center">Créditos Activos</th>
+                            <th class="w-20 px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">ID</th>
+                            <th class="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Cliente</th>
+                            <th class="w-32 px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Teléfono</th>
+                            <th class="w-32 px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center">Día Pago</th>
+                            <th class="w-32 px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-right">V. Ficha</th>
+                            <th class="w-20 px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center">Plazos</th>
+                            <th class="w-32 px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-right">Monto</th>
+                            <th class="w-32 px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-right">Total</th>
+                            <th class="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Asesor</th>
+                            <th class="w-32 px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center">Estatus</th>
                             <th class="w-32 px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-right">Acciones</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-50">
-                        <tr v-for="member in grupo.clientes" :key="member.id" class="hover:bg-slate-50/50 transition-colors group">
+                        <tr v-for="member in grupo.clientes" :key="member.id_cliente" class="hover:bg-slate-50/50 transition-colors group">
                             <td class="px-6 py-5">
-                                <div class="flex items-center gap-4">
-                                    <div class="w-10 h-10 bg-slate-50 rounded-full flex items-center justify-center text-slate-400 group-hover:bg-slate-900 group-hover:text-white transition-all duration-300 shadow-sm border border-slate-100">
-                                        <User :size="18" />
-                                    </div>
-                                    <div class="flex flex-col">
-                                        <span class="text-sm font-bold text-slate-900">{{ member.nombre }}</span>
-                                        <span class="text-[10px] text-slate-400 font-mono font-bold tracking-tight">ID #{{ member.id }}</span>
-                                    </div>
+                                <span class="text-xs font-bold text-slate-400 font-mono">#{{ member.id_cliente }}</span>
+                            </td>
+                            <td class="px-6 py-5">
+                                <div class="text-sm font-bold text-slate-900 uppercase tracking-tight flex items-center gap-2">
+                                    {{ member.nombre }}
+                                    <span v-if="grupo.id_responsable === member.id_cliente" class="px-2 py-0.5 bg-amber-100 text-amber-700 text-[9px] font-black uppercase tracking-widest rounded flex items-center gap-1" title="Responsable del Grupo">
+                                        <Star :size="10" />
+                                        Resp
+                                    </span>
                                 </div>
                             </td>
-                            <td class="px-6 py-5 text-center">
-                                <span class="px-2.5 py-1 bg-blue-50 text-blue-700 text-[10px] font-bold rounded-md uppercase tracking-wider">
-                                    {{ member.creditos_count }} créditos
-                                </span>
+                            <td class="px-6 py-5">
+                                <div class="text-sm font-bold text-slate-900 flex items-center gap-2">
+                                    <Phone :size="12" class="text-slate-300" />
+                                    {{ member.telefono || '---' }}
+                                </div>
                             </td>
+                            
+                            <!-- Loan Details (or empty state if no loan) -->
+                            <template v-if="member.latest_loan">
+                                <td class="px-6 py-5 text-center">
+                                    <div class="inline-flex px-2 py-1 bg-slate-100 text-slate-600 text-[10px] font-black uppercase tracking-widest rounded-md">
+                                        {{ member.latest_loan.dia_pago }}
+                                    </div>
+                                </td>
+                                <td class="px-6 py-5 text-right">
+                                    <div class="text-sm font-bold text-emerald-600">{{ formatCurrency(member.latest_loan.valor_ficha) }}</div>
+                                </td>
+                                <td class="px-6 py-5 text-center">
+                                    <div class="text-sm font-black text-slate-900">{{ member.latest_loan.plazo }}</div>
+                                </td>
+                                <td class="px-6 py-5 text-right">
+                                    <div class="text-xs font-bold text-slate-500">{{ formatCurrency(member.latest_loan.amount) }}</div>
+                                </td>
+                                <td class="px-6 py-5 text-right">
+                                    <div class="text-sm font-black text-slate-900">{{ formatCurrency(member.latest_loan.total) }}</div>
+                                </td>
+                                <td class="px-6 py-5">
+                                    <div class="text-xs font-bold text-slate-500 truncate">{{ member.latest_loan.asesor }}</div>
+                                </td>
+                                <td class="px-6 py-5 text-center">
+                                    <span v-if="member.latest_loan.completado" class="px-2.5 py-1 bg-emerald-50 text-emerald-600 text-[9px] font-black uppercase tracking-widest rounded-full border border-emerald-100 shadow-sm inline-flex items-center gap-1">
+                                        <CheckCircle2 :size="10" />
+                                        Liquidado
+                                    </span>
+                                    <span v-else class="px-2.5 py-1 bg-amber-50 text-amber-600 text-[9px] font-black uppercase tracking-widest rounded-full border border-amber-100 shadow-sm inline-flex items-center gap-1">
+                                        <Calendar :size="10" />
+                                        Pendiente
+                                    </span>
+                                </td>
+                            </template>
+                            <template v-else>
+                                <td colspan="7" class="px-6 py-5 text-center">
+                                    <span class="text-[10px] font-bold text-slate-300 uppercase tracking-widest italic">Sin crédito activo</span>
+                                </td>
+                            </template>
+
                             <td class="px-6 py-5 text-right">
                                 <div class="flex items-center justify-end gap-2">
                                     <Link 
-                                        :href="`/customers/${member.id}`"
-                                        class="p-2 text-slate-400 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-all"
-                                        title="Ver expediente"
+                                        v-if="member.latest_loan"
+                                        :href="`/loans/${member.latest_loan.id}`"
+                                        class="px-4 py-2 bg-emerald-600 text-white text-[10px] font-bold uppercase tracking-widest rounded-lg hover:bg-emerald-700 transition-all shadow-sm"
                                     >
-                                        <ChevronRight :size="18" />
+                                        Ver Préstamo
                                     </Link>
-                                    <button 
-                                        @click="removeClient(member.id)"
-                                        class="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all"
-                                        title="Remover del grupo"
+                                    <Link 
+                                        :href="`/customers/${member.id_cliente}`"
+                                        class="px-4 py-2 bg-slate-900 text-white text-[10px] font-bold uppercase tracking-widest rounded-lg hover:bg-slate-800 transition-all shadow-sm"
                                     >
-                                        <Trash2 :size="18" />
-                                    </button>
+                                        Ver Cliente
+                                    </Link>
                                 </div>
                             </td>
                         </tr>

@@ -61,7 +61,21 @@ const selectCustomer = (customer: { id: number; name: string; last_cycle: number
 
 // Close dropdown when clicking outside
 const closeDropdown = () => { showCustomerDropdown.value = false; };
-onMounted(() => document.addEventListener('click', closeDropdown));
+
+onMounted(() => {
+    document.addEventListener('click', closeDropdown);
+    
+    // Handle pre-selection from query params
+    const urlParams = new URLSearchParams(window.location.search);
+    const preselectedId = urlParams.get('id_cliente');
+    if (preselectedId) {
+        const customer = props.customers.find(c => c.id.toString() === preselectedId);
+        if (customer) {
+            selectCustomer(customer);
+        }
+    }
+});
+
 onUnmounted(() => document.removeEventListener('click', closeDropdown));
 
 // Auto-calculate Valor Ficha based on the 100/1000 rule

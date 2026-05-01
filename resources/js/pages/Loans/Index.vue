@@ -3,7 +3,7 @@ import { ref, computed } from 'vue';
 import { Head, Link, useForm } from '@inertiajs/vue3';
 import { 
     Plus, Search, Download, 
-    Calendar, ChevronRight, Phone, Wallet, X, CheckCircle2,
+    Calendar, ChevronRight, Phone, CheckCircle2,
     TrendingUp, ArrowDownCircle, ArrowUpCircle, Users, RotateCcw, Filter
 } from 'lucide-vue-next';
 import { dashboard as dashboardRoute } from '@/routes';
@@ -18,12 +18,15 @@ import { watch } from 'vue';
 interface Loan {
     id: number;
     customer: { nombre: string; telefono: string };
+    grupo: string | null;
     amount: number;
     interes: number;
     valor_ficha: number;
     total: number;
     pagado: number;
+    pendiente: number;
     completado: boolean;
+    cobrado_en_periodo: boolean;
     fecha: string;
     dia_pago: string;
     plazo: number;
@@ -37,6 +40,7 @@ const props = defineProps<{
         total_cobrado: number;
         total_pendiente: number;
         clientes_activos: number;
+        meta_periodo: number;
     };
     asesores: Array<{ id_asesor: number, nombre: string }>;
     filters: { search?: string, id_asesor?: string, status?: string, from_date?: string, to_date?: string };
@@ -87,32 +91,97 @@ const formatCurrency = (value: number) => {
     }).format(value);
 };
 
-// Payment Modal Logic
-const showPaymentModal = ref(false);
-const selectedLoan = ref<Loan | null>(null);
-const today = new Date().toISOString().split('T')[0];
+const isPaymentModalOpen = ref(false);
+const selectedLoanForPayment = ref<Loan | null>(null);
 
 const paymentForm = useForm({
-    id_credito: 0,
+    id_credito: '',
     monto: '',
-    fecha_pago: today,
+    fecha_pago: new Date().toISOString().split('T')[0],
 });
 
 const openPaymentModal = (loan: Loan) => {
-    selectedLoan.value = loan;
-    paymentForm.id_credito = loan.id;
+    selectedLoanForPayment.value = loan;
+    paymentForm.id_credito = loan.id.toString();
     paymentForm.monto = loan.valor_ficha.toString();
-    showPaymentModal.value = true;
+    // Default to fromDate if present, otherwise today
+    paymentForm.fecha_pago = fromDate.value || new Date().toISOString().split('T')[0];
+    isPaymentModalOpen.value = true;
+};
+
+const closePaymentModal = () => {
+    isPaymentModalOpen.value = false;
+    selectedLoanForPayment.value = null;
+    paymentForm.reset();
 };
 
 const submitPayment = () => {
-    paymentForm.post(paymentRoutes.store().url, {
+    paymentForm.post('/payments', {
+        preserveScroll: true,
         onSuccess: () => {
-            showPaymentModal.value = false;
-            paymentForm.reset('monto');
-        }
+            closePaymentModal();
+        },
     });
 };
+
+
+const groupedLoans = computed(() => {
+    const groups: Record<string, {
+        name: string;
+        loans: Loan[];
+        totalFichas: number;
+        collectableLoans: Loan[];
+    }> = {};
+
+    filteredLoans.value.forEach(loan => {
+        const groupName = loan.grupo || 'Individuales';
+        if (!groups[groupName]) {
+            groups[groupName] = { name: groupName, loans: [], totalFichas: 0, collectableLoans: [] };
+        }
+        groups[groupName].loans.push(loan);
+        
+        if (!loan.completado && !loan.cobrado_en_periodo) {
+            groups[groupName].collectableLoans.push(loan);
+            groups[groupName].totalFichas += loan.valor_ficha;
+        }
+    });
+    return groups;
+});
+
+const isBulkPaymentModalOpen = ref(false);
+const selectedGroupForPayment = ref<any>(null);
+
+const bulkPaymentForm = useForm({
+    payments: [] as { id_credito: number, monto: number, fecha_pago: string }[],
+});
+
+const openBulkPaymentModal = (group: any) => {
+    selectedGroupForPayment.value = group;
+    // Default to fromDate if present, otherwise today
+    const dateStr = fromDate.value || new Date().toISOString().split('T')[0];
+    bulkPaymentForm.payments = group.collectableLoans.map((l: Loan) => ({
+        id_credito: l.id,
+        monto: l.valor_ficha,
+        fecha_pago: dateStr
+    }));
+    isBulkPaymentModalOpen.value = true;
+};
+
+const closeBulkPaymentModal = () => {
+    isBulkPaymentModalOpen.value = false;
+    selectedGroupForPayment.value = null;
+    bulkPaymentForm.reset();
+};
+
+const submitBulkPayment = () => {
+    bulkPaymentForm.post('/payments/bulk', {
+        preserveScroll: true,
+        onSuccess: () => {
+            closeBulkPaymentModal();
+        },
+    });
+};
+
 </script>
 
 <template>
@@ -138,7 +207,18 @@ const submitPayment = () => {
             </header>
 
             <!-- Statistics Cards -->
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-12">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
+                <div class="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="p-2 bg-indigo-50 text-indigo-600 rounded-lg">
+                            <TrendingUp :size="18" />
+                        </div>
+                        <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Meta de Recuperación</span>
+                    </div>
+                    <div class="text-2xl font-black text-indigo-600">{{ formatCurrency(stats.meta_periodo) }}</div>
+                    <p class="text-[10px] text-indigo-600/60 font-medium mt-1 italic">Objetivo del periodo</p>
+                </div>
+
                 <div class="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
                     <div class="flex items-center justify-between mb-4">
                         <div class="p-2 bg-emerald-50 text-emerald-600 rounded-lg">
@@ -254,89 +334,127 @@ const submitPayment = () => {
             </transition>
 
             <!-- Tabla de Datos -->
-            <div class="bg-white border border-slate-100 rounded-xl shadow-sm overflow-x-auto min-h-[500px] pb-4">
-                <table class="w-full text-left border-collapse table-auto min-w-[1300px]">
+            <div class="bg-white border border-slate-100 rounded-xl shadow-sm overflow-x-auto min-h-[500px]">
+                <table class="w-full text-left border-collapse table-auto">
                     <thead>
                         <tr class="bg-slate-50/50 border-b border-slate-100">
-                            <th class="px-6 py-4 text-[9px] font-bold text-slate-400 uppercase tracking-widest w-16">ID</th>
-                            <th class="px-6 py-4 text-[9px] font-bold text-slate-400 uppercase tracking-widest w-48">Cliente</th>
-                            <th class="px-6 py-4 text-[9px] font-bold text-slate-400 uppercase tracking-widest w-32">Teléfono</th>
-                            <th class="px-6 py-4 text-[9px] font-bold text-slate-400 uppercase tracking-widest w-24">Día Pago</th>
-                            <th class="px-6 py-4 text-[9px] font-bold text-slate-400 uppercase tracking-widest text-right w-28">V. Ficha</th>
-                            <th class="px-6 py-4 text-[9px] font-bold text-slate-400 uppercase tracking-widest text-center w-16">Plazos</th>
-                            <th class="px-6 py-4 text-[9px] font-bold text-slate-400 uppercase tracking-widest text-right w-28">Monto</th>
-                            <th class="px-6 py-4 text-[9px] font-bold text-slate-400 uppercase tracking-widest text-right w-28">Interés</th>
-                            <th class="px-6 py-4 text-[9px] font-bold text-slate-400 uppercase tracking-widest text-right w-28">Total</th>
-                            <th class="px-6 py-4 text-[9px] font-bold text-slate-400 uppercase tracking-widest w-32">Asesor</th>
-                            <th class="px-6 py-4 text-[9px] font-bold text-slate-400 uppercase tracking-widest text-center w-32">Estatus</th>
-                            <th class="px-6 py-4 text-[9px] font-bold text-slate-400 uppercase tracking-widest text-right w-48">Acciones</th>
+                            <th class="w-20 px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">ID</th>
+                            <th class="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Cliente</th>
+                            <th class="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Grupo</th>
+                            <th class="w-32 px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Teléfono</th>
+                            <th class="w-32 px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center">Día Pago</th>
+                            <th class="w-32 px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-right">V. Ficha</th>
+                            <th class="w-32 px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-right">Pagado</th>
+                            <th class="w-32 px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-right">Pendiente</th>
+                            <th class="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Asesor</th>
+                            <th class="w-32 px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center">Estatus</th>
+                            <th class="w-40 px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-right">Acciones</th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-slate-50">
-                        <tr v-for="loan in filteredLoans" :key="loan.id" class="hover:bg-slate-50/50 transition-colors">
-                            <td class="px-6 py-5">
-                                <span class="text-[10px] font-bold text-slate-300 font-mono">#{{ loan.id }}</span>
-                            </td>
-                            <td class="px-6 py-5">
-                                <div class="text-[11px] font-bold text-slate-900 truncate">{{ loan.customer?.nombre || 'Desconocido' }}</div>
-                            </td>
-                            <td class="px-6 py-5">
-                                <div class="text-[10px] font-bold text-slate-500 flex items-center gap-1.5">
-                                    <Phone :size="10" class="text-slate-300" />
-                                    {{ loan.customer?.telefono || '---' }}
-                                </div>
-                            </td>
-                            <td class="px-6 py-5">
-                                <div class="text-[10px] font-black text-slate-900 uppercase">{{ loan.dia_pago }}</div>
-                            </td>
-                            <td class="px-6 py-5 text-right">
-                                <div class="text-xs font-bold text-emerald-600">{{ formatCurrency(loan.valor_ficha) }}</div>
-                            </td>
-                            <td class="px-6 py-5 text-center">
-                                <div class="text-xs font-black text-slate-900">{{ loan.plazo }}</div>
-                            </td>
-                            <td class="px-6 py-5 text-right">
-                                <div class="text-[11px] font-bold text-slate-500">{{ formatCurrency(loan.amount) }}</div>
-                            </td>
-                            <td class="px-6 py-5 text-right">
-                                <div class="text-[11px] font-bold text-slate-400">{{ formatCurrency(loan.interes) }}</div>
-                            </td>
-                            <td class="px-6 py-5 text-right">
-                                <div class="text-[11px] font-black text-slate-900">{{ formatCurrency(loan.total) }}</div>
-                            </td>
-                            <td class="px-6 py-5">
-                                <div class="text-[10px] font-bold text-slate-400 truncate">{{ loan.asesor }}</div>
-                            </td>
-                            <td class="px-6 py-5 text-center">
-                                <span v-if="loan.completado" class="px-2.5 py-1 bg-emerald-50 text-emerald-600 text-[8px] font-black uppercase tracking-widest rounded-full border border-emerald-100 shadow-sm inline-flex items-center gap-1">
-                                    <CheckCircle2 :size="10" />
-                                    Liquidado
-                                </span>
-                                <span v-else class="px-2.5 py-1 bg-amber-50 text-amber-600 text-[8px] font-black uppercase tracking-widest rounded-full border border-amber-100 shadow-sm inline-flex items-center gap-1">
-                                    <Calendar :size="10" />
-                                    Pendiente
-                                </span>
-                            </td>
-                            <td class="px-6 py-5 text-right">
-                                <div class="flex items-center justify-end gap-2">
-                                    <button 
-                                        v-if="!loan.completado"
-                                        @click="openPaymentModal(loan)"
-                                        class="px-3 py-1.5 bg-emerald-600 text-white text-[9px] font-bold uppercase tracking-widest rounded-lg hover:bg-emerald-700 transition-all shadow-sm flex items-center gap-1.5"
-                                    >
-                                        <Wallet :size="12" />
-                                        Cobrar
-                                    </button>
-                                    <Link 
-                                        :href="loanRoutes.show({ loan: loan.id }).url"
-                                        class="px-3 py-1.5 bg-slate-900 text-white text-[9px] font-bold uppercase tracking-widest rounded-lg hover:bg-slate-800 transition-all shadow-sm"
-                                    >
-                                        Ver Detalle
-                                    </Link>
-                                </div>
-                            </td>
-                        </tr>
-                        <tr v-if="filteredLoans.length === 0">
+                    <template v-for="(group, groupName) in groupedLoans" :key="groupName">
+                        <!-- Group Header -->
+                        <tbody class="bg-slate-50/80">
+                            <tr>
+                                <td colspan="11" class="px-6 py-4 border-b border-slate-100">
+                                    <div class="flex items-center justify-between">
+                                        <div class="flex items-center gap-3">
+                                            <div class="w-8 h-8 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center font-bold text-xs">
+                                                {{ groupName === 'Individuales' ? 'I' : groupName.charAt(0) }}
+                                            </div>
+                                            <div>
+                                                <h3 class="text-sm font-bold text-slate-900 uppercase tracking-tight">{{ groupName }}</h3>
+                                                <p class="text-[10px] text-slate-500 font-medium">{{ group.loans.length }} créditos en este bloque</p>
+                                            </div>
+                                        </div>
+                                        <button 
+                                            v-if="groupName !== 'Individuales' && group.collectableLoans.length > 0"
+                                            @click="openBulkPaymentModal(group)"
+                                            class="px-5 py-2 bg-indigo-600 text-white text-xs font-bold rounded-lg hover:bg-indigo-700 transition-all shadow-sm flex items-center gap-2"
+                                        >
+                                            <Users :size="14" />
+                                            Cobrar Grupo ({{ formatCurrency(group.totalFichas) }})
+                                        </button>
+                                        <span v-else-if="groupName !== 'Individuales'" class="text-[10px] font-bold text-emerald-600 uppercase tracking-widest px-3 py-1.5 bg-emerald-50 rounded-md border border-emerald-100 flex items-center gap-1">
+                                            <CheckCircle2 :size="14" /> Grupo al corriente
+                                        </span>
+                                    </div>
+                                </td>
+                            </tr>
+                        </tbody>
+                        <!-- Group Loans -->
+                        <tbody class="divide-y divide-slate-50">
+                            <tr v-for="loan in group.loans" :key="loan.id" class="hover:bg-slate-50/50 transition-colors">
+                                <td class="px-6 py-5">
+                                    <span class="text-xs font-bold text-slate-400 font-mono">#{{ loan.id }}</span>
+                                </td>
+                                <td class="px-6 py-5">
+                                    <div class="text-sm font-bold text-slate-900 uppercase tracking-tight">{{ loan.customer?.nombre || 'Desconocido' }}</div>
+                                </td>
+                                <td class="px-6 py-5">
+                                    <span v-if="loan.grupo" class="inline-flex px-2 py-1 bg-indigo-50 text-indigo-600 text-[9px] font-black uppercase tracking-widest rounded-md border border-indigo-100 shadow-sm">
+                                        {{ loan.grupo }}
+                                    </span>
+                                    <span v-else class="text-[10px] font-bold text-slate-300 uppercase tracking-widest italic">Individual</span>
+                                </td>
+                                <td class="px-6 py-5">
+                                    <div class="text-sm font-bold text-slate-900 flex items-center gap-2">
+                                        <Phone :size="12" class="text-slate-300" />
+                                        {{ loan.customer?.telefono || '---' }}
+                                    </div>
+                                </td>
+                                <td class="px-6 py-5 text-center">
+                                    <div class="inline-flex px-2 py-1 bg-slate-100 text-slate-600 text-[10px] font-black uppercase tracking-widest rounded-md">
+                                        {{ loan.dia_pago }}
+                                    </div>
+                                </td>
+                                <td class="px-6 py-5 text-right">
+                                    <div class="text-sm font-bold text-emerald-600">{{ formatCurrency(loan.valor_ficha) }}</div>
+                                </td>
+                                <td class="px-6 py-5 text-right">
+                                    <div class="text-xs font-bold text-slate-500">{{ formatCurrency(loan.pagado) }}</div>
+                                </td>
+                                <td class="px-6 py-5 text-right">
+                                    <div class="text-sm font-black text-slate-900">{{ formatCurrency(loan.pendiente) }}</div>
+                                </td>
+                                <td class="px-6 py-5">
+                                    <div class="text-xs font-bold text-slate-500 truncate">{{ loan.asesor }}</div>
+                                </td>
+                                <td class="px-6 py-5 text-center">
+                                    <span v-if="loan.completado" class="px-2.5 py-1 bg-emerald-50 text-emerald-600 text-[9px] font-black uppercase tracking-widest rounded-full border border-emerald-100 shadow-sm inline-flex items-center gap-1">
+                                        <CheckCircle2 :size="10" />
+                                        Liquidado
+                                    </span>
+                                    <span v-else class="px-2.5 py-1 bg-amber-50 text-amber-600 text-[9px] font-black uppercase tracking-widest rounded-full border border-amber-100 shadow-sm inline-flex items-center gap-1">
+                                        <Calendar :size="10" />
+                                        Pendiente
+                                    </span>
+                                </td>
+                                <td class="px-6 py-5 text-right">
+                                    <div class="flex items-center justify-end gap-2">
+                                        <span v-if="loan.cobrado_en_periodo" class="text-[10px] font-bold text-emerald-600 uppercase tracking-widest px-2.5 py-1 bg-emerald-50 rounded-md border border-emerald-100 flex items-center gap-1">
+                                            <CheckCircle2 :size="10" /> Cobrado
+                                        </span>
+                                        <button 
+                                            v-else-if="!loan.completado"
+                                            @click="openPaymentModal(loan)"
+                                            class="px-4 py-2 bg-emerald-600 text-white text-[10px] font-bold uppercase tracking-widest rounded-lg hover:bg-emerald-700 transition-all shadow-sm"
+                                        >
+                                            Cobrar
+                                        </button>
+
+                                        <Link 
+                                            :href="loanRoutes.show({ loan: loan.id }).url"
+                                            class="px-4 py-2 bg-slate-900 text-white text-[10px] font-bold uppercase tracking-widest rounded-lg hover:bg-slate-800 transition-all shadow-sm"
+                                        >
+                                            Ver Detalle
+                                        </Link>
+                                    </div>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </template>
+                    <tbody v-if="filteredLoans.length === 0">
+                        <tr>
                             <td colspan="11" class="py-20 text-center">
                                 <p class="text-slate-400 font-bold italic text-sm tracking-wider">No se encontraron resultados.</p>
                             </td>
@@ -344,50 +462,146 @@ const submitPayment = () => {
                     </tbody>
                 </table>
             </div>
-        </div>
 
-        <!-- Global Payment Modal -->
-        <div v-if="showPaymentModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-            <div class="bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
-                <div class="p-8">
-                    <div class="flex items-center gap-4 mb-8">
-                        <div class="w-12 h-12 bg-emerald-600 text-white rounded-xl flex items-center justify-center shadow-lg shadow-emerald-200">
-                            <Wallet :size="24" />
+            <!-- Modal Cobrar -->
+            <transition
+                enter-active-class="transition duration-200 ease-out"
+                enter-from-class="opacity-0 scale-95"
+                enter-to-class="opacity-100 scale-100"
+                leave-active-class="transition duration-150 ease-in"
+                leave-from-class="opacity-100 scale-100"
+                leave-to-class="opacity-0 scale-95"
+            >
+                <div v-if="isPaymentModalOpen" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+                    <div class="bg-white rounded-3xl shadow-xl w-full max-w-md overflow-hidden">
+                        <div class="p-6 border-b border-slate-100 flex items-center justify-between">
+                            <h3 class="text-xl font-bold text-slate-900">Registrar Cobro</h3>
+                            <button @click="closePaymentModal" class="text-slate-400 hover:text-slate-600 p-2">
+                                <span class="sr-only">Cerrar</span>
+                                <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                            </button>
                         </div>
-                        <div>
-                            <h2 class="text-xl font-bold text-slate-900">Registrar Cobro</h2>
-                            <p class="text-xs text-slate-500 font-medium">{{ selectedLoan?.customer?.nombre }}</p>
+                        <div class="p-6">
+                            <div v-if="selectedLoanForPayment" class="mb-6 p-4 bg-slate-50 rounded-xl border border-slate-100">
+                                <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Cliente</p>
+                                <p class="text-sm font-bold text-slate-900 uppercase mb-3">{{ selectedLoanForPayment.customer?.nombre }}</p>
+                                
+                                <div class="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Ficha Sugerida</p>
+                                        <p class="text-sm font-black text-emerald-600">{{ formatCurrency(selectedLoanForPayment.valor_ficha) }}</p>
+                                    </div>
+                                    <div>
+                                        <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Pendiente</p>
+                                        <p class="text-sm font-black text-slate-900">{{ formatCurrency(selectedLoanForPayment.pendiente) }}</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <form @submit.prevent="submitPayment" class="space-y-4">
+                                <div>
+                                    <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1 mb-2">Monto a Cobrar</label>
+                                    <input 
+                                        type="number" 
+                                        step="0.01" 
+                                        v-model="paymentForm.monto"
+                                        required
+                                        class="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl outline-none focus:border-slate-900 transition-all text-sm font-bold text-slate-900 shadow-sm"
+                                    />
+                                </div>
+                                <div>
+                                    <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1 mb-2">Fecha de Pago</label>
+                                    <input 
+                                        type="date" 
+                                        v-model="paymentForm.fecha_pago"
+                                        required
+                                        class="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl outline-none focus:border-slate-900 transition-all text-sm font-bold text-slate-900 shadow-sm"
+                                    />
+                                </div>
+                                <div class="pt-4 flex gap-3">
+                                    <button 
+                                        type="button" 
+                                        @click="closePaymentModal"
+                                        class="flex-1 px-4 py-3 bg-white border border-slate-200 text-slate-600 text-sm font-bold rounded-xl hover:bg-slate-50 transition-all"
+                                    >
+                                        Cancelar
+                                    </button>
+                                    <button 
+                                        type="submit" 
+                                        :disabled="paymentForm.processing"
+                                        class="flex-1 px-4 py-3 bg-emerald-600 text-white text-sm font-bold rounded-xl hover:bg-emerald-700 transition-all shadow-sm disabled:opacity-50"
+                                    >
+                                        {{ paymentForm.processing ? 'Registrando...' : 'Confirmar Cobro' }}
+                                    </button>
+                                </div>
+                            </form>
                         </div>
                     </div>
-
-                    <form @submit.prevent="submitPayment" class="space-y-6">
-                        <div class="space-y-2">
-                            <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-1">Monto del Abono</label>
-                            <div class="relative">
-                                <span class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold">$</span>
-                                <input v-model="paymentForm.monto" type="number" step="0.01" required class="w-full pl-8 pr-4 py-3 bg-slate-50 border border-slate-200 focus:border-slate-900 focus:bg-white rounded-lg outline-none transition-all text-sm font-semibold" />
-                            </div>
-                            <p class="text-[9px] text-slate-400 font-medium pl-1 italic">
-                                * Si el monto excede la ficha, el resto se aplicará a la siguiente cuota automáticamente.
-                            </p>
-                        </div>
-
-                        <div class="space-y-2">
-                            <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-1">Fecha de Operación</label>
-                            <input v-model="paymentForm.fecha_pago" type="date" required class="w-full px-4 py-3 bg-slate-50 border border-slate-200 focus:border-slate-900 focus:bg-white rounded-lg outline-none transition-all text-sm font-semibold" />
-                        </div>
-
-                        <div class="flex gap-3 pt-4">
-                            <button type="button" @click="showPaymentModal = false" class="flex-1 py-3 text-xs font-bold text-slate-500 hover:text-slate-900 transition-all">
-                                Cancelar
-                            </button>
-                            <button type="submit" :disabled="paymentForm.processing" class="flex-1 py-3 bg-slate-900 text-white text-xs font-bold rounded-xl hover:bg-slate-800 transition-all shadow-sm">
-                                {{ paymentForm.processing ? 'Procesando...' : 'Registrar Abono' }}
-                            </button>
-                        </div>
-                    </form>
                 </div>
-            </div>
+            </transition>
+
+            <!-- Modal Cobro Grupal -->
+            <transition
+                enter-active-class="transition duration-200 ease-out"
+                enter-from-class="opacity-0 scale-95"
+                enter-to-class="opacity-100 scale-100"
+                leave-active-class="transition duration-150 ease-in"
+                leave-from-class="opacity-100 scale-100"
+                leave-to-class="opacity-0 scale-95"
+            >
+                <div v-if="isBulkPaymentModalOpen" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+                    <div class="bg-white rounded-3xl shadow-xl w-full max-w-md overflow-hidden">
+                        <div class="p-6 border-b border-slate-100 flex items-center justify-between">
+                            <h3 class="text-xl font-bold text-slate-900">Cobro Grupal</h3>
+                            <button @click="closeBulkPaymentModal" class="text-slate-400 hover:text-slate-600 p-2">
+                                <span class="sr-only">Cerrar</span>
+                                <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                            </button>
+                        </div>
+                        <div class="p-6">
+                            <div v-if="selectedGroupForPayment" class="mb-6 p-4 bg-slate-50 rounded-xl border border-slate-100">
+                                <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Grupo a Cobrar</p>
+                                <p class="text-sm font-bold text-slate-900 uppercase mb-3">{{ selectedGroupForPayment.name }}</p>
+                                
+                                <div class="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Clientes</p>
+                                        <p class="text-sm font-black text-slate-900">{{ selectedGroupForPayment.collectableLoans.length }} clientes</p>
+                                    </div>
+                                    <div>
+                                        <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Monto Total</p>
+                                        <p class="text-sm font-black text-emerald-600">{{ formatCurrency(selectedGroupForPayment.totalFichas) }}</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="text-sm text-slate-500 mb-6 bg-amber-50 text-amber-700 p-4 rounded-xl border border-amber-100">
+                                Se registrará un pago por la <strong>ficha correspondiente</strong> a cada integrante activo del grupo.
+                            </div>
+
+                            <form @submit.prevent="submitBulkPayment" class="space-y-4">
+                                <div class="pt-2 flex gap-3">
+                                    <button 
+                                        type="button" 
+                                        @click="closeBulkPaymentModal"
+                                        class="flex-1 px-4 py-3 bg-white border border-slate-200 text-slate-600 text-sm font-bold rounded-xl hover:bg-slate-50 transition-all"
+                                    >
+                                        Cancelar
+                                    </button>
+                                    <button 
+                                        type="submit" 
+                                        :disabled="bulkPaymentForm.processing"
+                                        class="flex-1 px-4 py-3 bg-indigo-600 text-white text-sm font-bold rounded-xl hover:bg-indigo-700 transition-all shadow-sm disabled:opacity-50"
+                                    >
+                                        {{ bulkPaymentForm.processing ? 'Procesando...' : 'Confirmar Cobro Grupal' }}
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </transition>
+
         </div>
     </AppLayout>
 </template>
