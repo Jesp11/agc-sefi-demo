@@ -8,14 +8,19 @@ import { dashboard as dashboardRoute } from '@/routes';
 import customersRoutes from '@/routes/customers';
 import type { BreadcrumbItem } from '@/types';
 import AppLayout from '@/layouts/AppLayout.vue';
+import SearchableSelect from '@/Components/SearchableSelect.vue';
+
+import { onMounted, watch } from 'vue';
 
 const props = defineProps<{
     asesores: Array<{ id_asesor: number, nombre: string }>;
+    grupos: Array<{ id_grupo: number, nombre: string, id_asesor: number }>;
 }>();
 
 const form = useForm({
     nombre: '',
-    id_asesor: '',
+    id_asesor: '' as number | string,
+    id_grupo: '' as number | string,
     curp: '',
     clave_elector: '',
     telefono: '',
@@ -26,6 +31,26 @@ const form = useForm({
     ],
     referencias: [] as any[],
     avales: [] as any[]
+});
+
+const prefillAsesor = (grupoId: number | string) => {
+    const grupo = props.grupos.find(g => g.id_grupo == grupoId);
+    if (grupo && grupo.id_asesor) {
+        form.id_asesor = grupo.id_asesor;
+    }
+};
+
+watch(() => form.id_grupo, (newVal) => {
+    if (newVal) prefillAsesor(newVal);
+});
+
+onMounted(() => {
+    const params = new URLSearchParams(window.location.search);
+    const grupoId = params.get('id_grupo');
+    if (grupoId) {
+        form.id_grupo = parseInt(grupoId);
+        prefillAsesor(form.id_grupo);
+    }
 });
 
 const addReferencia = () => {
@@ -49,7 +74,7 @@ const addAval = () => {
 };
 
 const submit = () => {
-    form.post(customersRoutes.store().url);
+    form.post('/customers');
 };
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -63,7 +88,7 @@ const breadcrumbs: BreadcrumbItem[] = [
     <Head title="Nuevo Cliente" />
 
     <AppLayout :breadcrumbs="breadcrumbs">
-        <div class="max-w-5xl mx-auto p-8 lg:p-12 bg-white min-h-screen shadow-sm border-x border-slate-100">
+        <form @submit.prevent="submit" class="max-w-5xl mx-auto p-8 lg:p-12 bg-white min-h-screen shadow-sm border-x border-slate-100">
             <!-- Professional Header -->
             <header class="flex items-center justify-between gap-6 mb-16 pb-8 border-b border-slate-200">
                 <div class="flex items-center gap-6">
@@ -86,7 +111,7 @@ const breadcrumbs: BreadcrumbItem[] = [
                         Cancelar
                     </Link>
                     <button 
-                        @click="submit"
+                        type="submit"
                         :disabled="form.processing"
                         class="px-8 py-3 bg-slate-900 text-white text-xs font-bold rounded-lg hover:bg-slate-800 transition-all flex items-center gap-2 disabled:opacity-50"
                     >
@@ -108,36 +133,57 @@ const breadcrumbs: BreadcrumbItem[] = [
                         <div class="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-8">
                             <div class="space-y-2">
                                 <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1">Nombre Completo</label>
-                                <input v-model="form.nombre" type="text" placeholder="Ej. Juan Pérez López" class="w-full px-4 py-3 bg-slate-50 border border-slate-200 focus:border-slate-900 focus:bg-white rounded-lg outline-none transition-all text-sm font-semibold" />
+                                <input v-model="form.nombre" type="text" placeholder="Ej. Juan Pérez López" class="w-full px-4 py-3 bg-slate-50 border border-slate-200 focus:border-slate-900 focus:bg-white rounded-lg outline-none transition-all text-sm font-semibold" :class="{ 'border-rose-500': form.errors.nombre }" />
+                                <p v-if="form.errors.nombre" class="text-[10px] text-rose-500 font-bold mt-1 ml-1">{{ form.errors.nombre }}</p>
                             </div>
                             <div class="space-y-2">
                                 <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1">Asesor Permanente</label>
-                                <div class="relative">
-                                    <select v-model="form.id_asesor" class="w-full px-4 py-3 bg-slate-50 border border-slate-200 focus:border-slate-900 focus:bg-white rounded-lg outline-none transition-all text-sm font-semibold appearance-none pr-10">
-                                        <option value="">Seleccionar Asesor</option>
-                                        <option v-for="asesor in asesores" :key="asesor.id_asesor" :value="asesor.id_asesor">
-                                            {{ asesor.nombre }}
-                                        </option>
-                                    </select>
-                                    <ChevronDown class="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" :size="16" />
-                                </div>
+                                <SearchableSelect 
+                                    v-model="form.id_asesor"
+                                    :options="asesores.map(a => ({ id: a.id_asesor, label: a.nombre }))"
+                                    placeholder="Seleccionar Asesor"
+                                    search-placeholder="Buscar asesor..."
+                                    empty-text="No se encontraron asesores"
+                                />
+                                <p v-if="form.errors.id_asesor" class="text-[10px] text-rose-500 font-bold mt-1 ml-1">{{ form.errors.id_asesor }}</p>
                             </div>
                         </div>
                         <div class="space-y-2">
                             <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1">Teléfono</label>
-                            <input v-model="form.telefono" type="tel" placeholder="10 dígitos" class="w-full px-4 py-3 bg-slate-50 border border-slate-200 focus:border-slate-900 focus:bg-white rounded-lg outline-none transition-all text-sm font-semibold" />
+                            <input v-model="form.telefono" type="tel" placeholder="10 dígitos" class="w-full px-4 py-3 bg-slate-50 border border-slate-200 focus:border-slate-900 focus:bg-white rounded-lg outline-none transition-all text-sm font-semibold" :class="{ 'border-rose-500': form.errors.telefono }" />
+                            <p v-if="form.errors.telefono" class="text-[10px] text-rose-500 font-bold mt-1 ml-1">{{ form.errors.telefono }}</p>
                         </div>
                         <div class="space-y-2">
                             <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1">Ocupación Actual</label>
-                            <input v-model="form.ocupacion" type="text" placeholder="Ej. Comerciante" class="w-full px-4 py-3 bg-slate-50 border border-slate-200 focus:border-slate-900 focus:bg-white rounded-lg outline-none transition-all text-sm font-semibold" />
+                            <input v-model="form.ocupacion" type="text" placeholder="Ej. Comerciante" class="w-full px-4 py-3 bg-slate-50 border border-slate-200 focus:border-slate-900 focus:bg-white rounded-lg outline-none transition-all text-sm font-semibold" :class="{ 'border-rose-500': form.errors.ocupacion }" />
+                            <p v-if="form.errors.ocupacion" class="text-[10px] text-rose-500 font-bold mt-1 ml-1">{{ form.errors.ocupacion }}</p>
                         </div>
                         <div class="space-y-2">
                             <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1">CURP</label>
-                            <input v-model="form.curp" type="text" placeholder="18 caracteres" class="w-full px-4 py-3 bg-slate-50 border border-slate-200 focus:border-slate-900 focus:bg-white rounded-lg outline-none transition-all text-sm font-semibold font-mono" />
+                            <input v-model="form.curp" type="text" placeholder="18 caracteres" class="w-full px-4 py-3 bg-slate-50 border border-slate-200 focus:border-slate-900 focus:bg-white rounded-lg outline-none transition-all text-sm font-semibold font-mono" :class="{ 'border-rose-500': form.errors.curp }" />
+                            <p v-if="form.errors.curp" class="text-[10px] text-rose-500 font-bold mt-1 ml-1">{{ form.errors.curp }}</p>
                         </div>
                         <div class="space-y-2">
                             <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1">Clave Elector</label>
-                            <input v-model="form.clave_elector" type="text" placeholder="ID Credencial" class="w-full px-4 py-3 bg-slate-50 border border-slate-200 focus:border-slate-900 focus:bg-white rounded-lg outline-none transition-all text-sm font-semibold font-mono" />
+                            <input v-model="form.clave_elector" type="text" placeholder="ID Credencial" class="w-full px-4 py-3 bg-slate-50 border border-slate-200 focus:border-slate-900 focus:bg-white rounded-lg outline-none transition-all text-sm font-semibold font-mono" :class="{ 'border-rose-500': form.errors.clave_elector }" />
+                            <p v-if="form.errors.clave_elector" class="text-[10px] text-rose-500 font-bold mt-1 ml-1">{{ form.errors.clave_elector }}</p>
+                        </div>
+                        <div class="md:col-span-2 space-y-2">
+                            <div class="flex items-center gap-2 mb-2">
+                                <Users :size="14" class="text-slate-400" />
+                                <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1">Asignación de Grupo (Opcional)</label>
+                            </div>
+                            
+                            <SearchableSelect 
+                                v-model="form.id_grupo"
+                                :options="grupos.map(g => ({ id: g.id_grupo, label: g.nombre }))"
+                                placeholder="Ninguno (Cartera Individual)"
+                                search-placeholder="Buscar grupo..."
+                                empty-text="No se encontraron grupos"
+                            />
+                            
+                            <p v-if="form.errors.id_grupo" class="text-[10px] text-rose-500 font-bold mt-1 ml-1">{{ form.errors.id_grupo }}</p>
+                            <p class="text-[10px] text-slate-400 italic mt-1 ml-1">Si selecciona un grupo, el cliente pertenecerá a la cartera grupal.</p>
                         </div>
                     </div>
                 </section>
@@ -253,6 +299,6 @@ const breadcrumbs: BreadcrumbItem[] = [
                     </div>
                 </section>
             </div>
-        </div>
+        </form>
     </AppLayout>
 </template>

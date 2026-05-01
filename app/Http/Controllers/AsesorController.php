@@ -42,9 +42,14 @@ class AsesorController extends Controller
 
     public function show(Asesor $asesor)
     {
-        $asesor->load(['ahorros' => function($q) {
-            $q->orderBy('fecha', 'desc');
-        }, 'creditos.cliente']);
+        $asesor->load([
+            'ahorros' => function($q) {
+                $q->orderBy('fecha', 'desc');
+            }, 
+            'creditos.cliente',
+            'creditosGrupales.cliente',
+            'creditosGrupales.grupo'
+        ]);
 
         return Inertia::render('Asesores/Show', [
             'asesor' => [
@@ -52,6 +57,7 @@ class AsesorController extends Controller
                 'nombre' => $asesor->nombre,
                 'ahorros' => $asesor->ahorros,
                 'creditos' => $asesor->creditos,
+                'creditos_grupales' => $asesor->creditosGrupales,
                 'total_ahorro' => $asesor->ahorros->sum('monto')
             ]
         ]);

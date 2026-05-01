@@ -94,26 +94,12 @@ const deleteAsesor = (id: number) => {
                                 <div class="text-sm font-bold text-slate-900">{{ asesor.creditos_count }}</div>
                             </td>
                              <td class="px-6 py-5 text-right">
-                                <div class="flex items-center justify-end gap-2">
-                                    <Link 
-                                        :href="`/asesores/${asesor.id}`"
-                                        class="px-4 py-2 bg-indigo-50 text-indigo-600 text-[10px] font-bold uppercase tracking-widest rounded hover:bg-indigo-600 hover:text-white transition-all"
-                                    >
-                                        Ver Expediente
-                                    </Link>
-                                    <Link 
-                                        :href="`/asesores/${asesor.id}/edit`"
-                                        class="px-4 py-2 bg-slate-100 text-slate-900 text-[10px] font-bold uppercase tracking-widest rounded hover:bg-slate-900 hover:text-white transition-all"
-                                    >
-                                        Editar
-                                    </Link>
-                                    <button 
-                                        @click="deleteAsesor(asesor.id)"
-                                        class="p-2 text-slate-300 hover:text-rose-600 transition-colors ml-2"
-                                    >
-                                        <Trash2 :size="16" />
-                                    </button>
-                                </div>
+                                <Link 
+                                    :href="`/asesores/${asesor.id}`"
+                                    class="px-4 py-2 bg-slate-900 text-white text-[10px] font-bold uppercase tracking-widest rounded-lg hover:bg-slate-800 transition-all shadow-sm"
+                                >
+                                    Ver Detalle
+                                </Link>
                             </td>
                         </tr>
                         <tr v-if="filteredAsesores.length === 0">

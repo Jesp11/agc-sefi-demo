@@ -32,49 +32,59 @@ const submit = () => {
     <Head :title="`Editar - ${asesor.nombre}`" />
 
     <AppLayout :breadcrumbs="breadcrumbs">
-        <div class="max-w-2xl mx-auto p-8 lg:p-12 bg-white min-h-screen shadow-sm border-x border-slate-100">
-            <!-- Professional Header -->
-            <header class="flex items-center justify-between gap-6 mb-16 pb-8 border-b border-slate-200">
+        <div class="max-w-4xl mx-auto p-8 lg:p-12">
+            <!-- Header -->
+            <header class="flex items-center justify-between gap-8 mb-12">
                 <div class="flex items-center gap-6">
                     <Link 
                         :href="asesorRoutes.index().url" 
-                        class="text-slate-400 hover:text-slate-900 transition-colors"
+                        class="p-2.5 bg-white border border-slate-200 rounded-xl text-slate-400 hover:text-slate-900 transition-all shadow-sm active:scale-95"
                     >
-                        <ArrowLeft :size="24" />
+                        <ArrowLeft :size="20" />
                     </Link>
                     <div>
-                        <p class="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1">Modificar Registro</p>
                         <h1 class="text-3xl font-bold text-slate-900 tracking-tight">Editar Asesor</h1>
+                        <p class="text-sm text-slate-500 font-medium mt-1">Actualice la información personal del asesor responsable.</p>
                     </div>
                 </div>
-                <button 
-                    @click="submit"
-                    :disabled="form.processing"
-                    class="px-8 py-3 bg-slate-900 text-white text-xs font-bold rounded-lg hover:bg-slate-800 transition-all flex items-center gap-2 disabled:opacity-50"
-                >
-                    <Save :size="16" />
-                    {{ form.processing ? 'Actualizando...' : 'Guardar Cambios' }}
-                </button>
             </header>
 
-            <form @submit.prevent="submit" class="space-y-8">
-                <div class="space-y-4">
-                    <div class="flex items-center gap-2 border-b border-slate-100 pb-2">
-                        <UserCheck :size="18" class="text-slate-400" />
-                        <h2 class="text-xs font-bold text-slate-400 uppercase tracking-widest">Información Personal</h2>
+            <!-- Formulario -->
+            <div class="bg-white border border-slate-100 rounded-xl shadow-sm p-8 lg:p-10">
+                <form @submit.prevent="submit" class="space-y-8">
+                    <div class="space-y-6">
+                        <div class="flex items-center gap-3 border-b border-slate-50 pb-4">
+                            <div class="p-2 bg-blue-50 text-blue-700 rounded-lg">
+                                <UserCheck :size="18" />
+                            </div>
+                            <h2 class="text-sm font-bold text-slate-900 uppercase tracking-tight">Información Personal</h2>
+                        </div>
+
+                        <div class="max-w-xl space-y-2">
+                            <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Nombre Completo</label>
+                            <input 
+                                v-model="form.nombre" 
+                                type="text" 
+                                placeholder="Nombre completo del asesor"
+                                class="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-slate-900 focus:bg-white transition-all text-sm font-bold text-slate-900" 
+                                :class="{ 'border-rose-500 ring-rose-500/20': form.errors.nombre }"
+                            />
+                            <div v-if="form.errors.nombre" class="text-xs text-rose-500 font-bold mt-1 pl-1">{{ form.errors.nombre }}</div>
+                        </div>
                     </div>
 
-                    <div class="space-y-2">
-                        <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1">Nombre Completo</label>
-                        <input 
-                            v-model="form.nombre" 
-                            type="text" 
-                            class="w-full px-4 py-3 bg-slate-50 border border-slate-200 focus:border-slate-900 focus:bg-white rounded-lg outline-none transition-all text-sm font-semibold" 
-                        />
-                        <div v-if="form.errors.nombre" class="text-xs text-rose-500 font-bold mt-1 pl-1">{{ form.errors.nombre }}</div>
+                    <div class="pt-6 flex justify-end border-t border-slate-50">
+                        <button 
+                            type="submit"
+                            :disabled="form.processing"
+                            class="px-8 py-3.5 bg-slate-900 text-white font-bold rounded-xl hover:bg-slate-800 transition-all text-xs shadow-lg shadow-slate-900/10 active:scale-95 disabled:opacity-50 flex items-center gap-3"
+                        >
+                            <Save :size="18" />
+                            {{ form.processing ? 'Actualizando...' : 'Guardar Cambios' }}
+                        </button>
                     </div>
-                </div>
-            </form>
+                </form>
+            </div>
         </div>
     </AppLayout>
 </template>

@@ -16,12 +16,18 @@ class Cliente extends Model
 
     protected $fillable = [
         'id_asesor',
+        'id_grupo',
         'nombre',
         'curp',
         'clave_elector',
         'telefono',
         'ocupacion',
     ];
+
+    public function grupo()
+    {
+        return $this->belongsTo(Grupo::class, 'id_grupo', 'id_grupo');
+    }
 
     public function direcciones(): BelongsToMany
     {

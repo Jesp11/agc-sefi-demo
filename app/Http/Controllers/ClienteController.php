@@ -17,14 +17,43 @@ class ClienteController extends Controller
     public function index()
     {
         return Inertia::render('Customers/Index', [
-            'customers' => Cliente::with(['direcciones', 'referencias', 'avales', 'creditos', 'asesor'])->get()
+            'customers' => Cliente::with(['direcciones', 'referencias', 'avales', 'creditos', 'asesor', 'grupo'])
+                ->orderBy('nombre')
+                ->get()
+        ]);
+    }
+
+    public function carteraIndividual()
+    {
+        return Inertia::render('Customers/IndividualIndex', [
+            'customers' => Cliente::with(['direcciones', 'referencias', 'avales', 'creditos', 'asesor'])
+                ->whereNull('id_grupo')
+                ->orderBy('nombre')
+                ->get()
+        ]);
+    }
+
+    public function carteraGrupal(Request $request)
+    {
+        $query = Cliente::with(['direcciones', 'referencias', 'avales', 'creditos', 'asesor', 'grupo'])
+            ->whereNotNull('id_grupo');
+
+        if ($request->has('grupo_id') && $request->grupo_id) {
+            $query->where('id_grupo', $request->grupo_id);
+        }
+
+        return Inertia::render('Customers/GroupedIndex', [
+            'customers' => $query->get(),
+            'grupos' => \App\Models\Grupo::orderBy('nombre')->get(['id_grupo', 'nombre']),
+            'filters' => $request->only('grupo_id')
         ]);
     }
 
     public function create()
     {
         return Inertia::render('Customers/Create', [
-            'asesores' => Asesor::orderBy('nombre')->get()
+            'asesores' => Asesor::orderBy('nombre')->get(),
+            'grupos' => \App\Models\Grupo::orderBy('nombre')->get(['id_grupo', 'nombre', 'id_asesor'])
         ]);
     }
 
@@ -37,9 +66,37 @@ class ClienteController extends Controller
 
     public function exportPdf()
     {
-        $customers = Cliente::with('creditos')->orderBy('nombre')->get();
+        $customers = Cliente::with(['creditos', 'direcciones', 'asesor', 'grupo'])
+            ->orderByRaw('id_grupo IS NOT NULL') // NULLS FIRST equivalent
+            ->orderBy('id_grupo')
+            ->orderBy('nombre')
+            ->get();
+            
         $pdf = Pdf::loadView('pdf.customer-list', compact('customers'));
-        return $pdf->download('Directorio_Clientes.pdf');
+        return $pdf->download('Directorio_General_Clientes.pdf');
+    }
+
+    public function exportIndividualPdf()
+    {
+        $customers = Cliente::with(['creditos', 'direcciones', 'asesor'])
+            ->whereNull('id_grupo')
+            ->orderBy('nombre')
+            ->get();
+        
+        $pdf = Pdf::loadView('pdf.individual-portfolio', compact('customers'));
+        return $pdf->download('Cartera_Individual.pdf');
+    }
+
+    public function exportGrupalPdf()
+    {
+        $customers = Cliente::with(['creditos', 'direcciones', 'asesor', 'grupo'])
+            ->whereNotNull('id_grupo')
+            ->orderBy('id_grupo')
+            ->orderBy('nombre')
+            ->get();
+        
+        $pdf = Pdf::loadView('pdf.grouped-portfolio', compact('customers'));
+        return $pdf->download('Cartera_Grupal.pdf');
     }
 
     public function store(Request $request)
@@ -48,6 +105,7 @@ class ClienteController extends Controller
             // Cliente
             'nombre' => 'required|string|max:255',
             'id_asesor' => 'nullable|exists:asesores,id_asesor',
+            'id_grupo' => 'nullable|exists:grupos,id_grupo',
             'curp' => 'nullable|string|max:50',
             'clave_elector' => 'nullable|string|max:50',
             'telefono' => 'nullable|string|max:20',
@@ -57,7 +115,7 @@ class ClienteController extends Controller
             'direcciones' => 'nullable|array',
             'direcciones.*.direccion' => 'required|string',
             'direcciones.*.entre_calles' => 'nullable|string',
-            'direcciones.*.tipo' => 'required|in:casa,trabajo',
+            'direcciones.*.pivot.tipo' => 'required|in:casa,trabajo',
 
             // Referencias
             'referencias' => 'nullable|array',
@@ -80,6 +138,7 @@ class ClienteController extends Controller
             $cliente = Cliente::create([
                 'nombre' => $validated['nombre'],
                 'id_asesor' => $validated['id_asesor'],
+                'id_grupo' => $validated['id_grupo'] ?? null,
                 'curp' => $validated['curp'],
                 'clave_elector' => $validated['clave_elector'],
                 'telefono' => $validated['telefono'],
@@ -92,7 +151,7 @@ class ClienteController extends Controller
                         'direccion' => $dirData['direccion'],
                         'entre_calles' => $dirData['entre_calles'],
                     ]);
-                    $cliente->direcciones()->attach($direccion->id_direccion, ['tipo' => $dirData['tipo']]);
+                    $cliente->direcciones()->attach($direccion->id_direccion, ['tipo' => $dirData['pivot']['tipo']]);
                 }
             }
 
@@ -109,6 +168,10 @@ class ClienteController extends Controller
             }
         });
 
+        if (!empty($validated['id_grupo'])) {
+            return redirect()->route('grupos.show', $validated['id_grupo'])->with('success', 'Cliente creado y asignado al grupo exitosamente.');
+        }
+
         return redirect()->route('customers.index')->with('success', 'Cliente creado exitosamente.');
     }
 
@@ -116,7 +179,8 @@ class ClienteController extends Controller
     {
         return Inertia::render('Customers/Edit', [
             'customer' => $customer->load(['direcciones', 'referencias', 'avales']),
-            'asesores' => Asesor::orderBy('nombre')->get()
+            'asesores' => Asesor::orderBy('nombre')->get(),
+            'grupos' => \App\Models\Grupo::orderBy('nombre')->get(['id_grupo', 'nombre'])
         ]);
     }
 
@@ -125,6 +189,7 @@ class ClienteController extends Controller
         $validated = $request->validate([
             'nombre' => 'required|string|max:255',
             'id_asesor' => 'nullable|exists:asesores,id_asesor',
+            'id_grupo' => 'nullable|exists:grupos,id_grupo',
             'curp' => 'nullable|string|max:50',
             'clave_elector' => 'nullable|string|max:50',
             'telefono' => 'nullable|string|max:20',
@@ -157,6 +222,7 @@ class ClienteController extends Controller
             $customer->update([
                 'nombre' => $validated['nombre'],
                 'id_asesor' => $validated['id_asesor'],
+                'id_grupo' => $validated['id_grupo'] ?? null,
                 'curp' => $validated['curp'],
                 'clave_elector' => $validated['clave_elector'],
                 'telefono' => $validated['telefono'],

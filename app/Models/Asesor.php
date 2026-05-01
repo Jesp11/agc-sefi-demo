@@ -22,6 +22,16 @@ class Asesor extends Model
         return $this->hasMany(Credito::class, 'id_asesor', 'id_asesor');
     }
 
+    public function creditosGrupales(): HasMany
+    {
+        return $this->hasMany(CreditoGrupal::class, 'id_asesor', 'id_asesor');
+    }
+
+    public function grupos(): HasMany
+    {
+        return $this->hasMany(Grupo::class, 'id_asesor', 'id_asesor');
+    }
+
     public function ahorros(): HasMany
     {
         return $this->hasMany(AhorroVoluntario::class, 'id_asesor', 'id_asesor');

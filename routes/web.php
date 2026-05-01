@@ -8,6 +8,7 @@ use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\AsesorController;
 use App\Http\Controllers\SavingsController;
+use App\Http\Controllers\GrupoController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -18,7 +19,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
 
     Route::get('/customers/export-pdf', [ClienteController::class, 'exportPdf'])->name('customers.export-pdf');
+    Route::get('/customers/export-individual', [ClienteController::class, 'exportIndividualPdf'])->name('customers.export-individual');
+    Route::get('/customers/export-grupal', [ClienteController::class, 'exportGrupalPdf'])->name('customers.export-grupal');
     Route::resource('customers', ClienteController::class);
+    Route::get('/cartera-grupal', [ClienteController::class, 'carteraGrupal'])->name('customers.grupal');
+    Route::get('/cartera-individual', [ClienteController::class, 'carteraIndividual'])->name('customers.individual');
 
     Route::resource('loans', LoanController::class);
     Route::get('/loans/{loan}/export-pdf', [LoanController::class, 'exportPdf'])->name('loans.export-pdf');
@@ -38,7 +43,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Route::get('/reports/upcoming', [ReportController::class, 'upcoming'])->name('reports.upcoming');
     // Route::get('/reports/upcoming/export-pdf', [ReportController::class, 'exportUpcomingPdf'])->name('reports.upcoming.export-pdf');
 
-    // Voluntary Savings
+    // Groups
+    Route::resource('grupos', GrupoController::class);
+    Route::post('/grupos/{grupo}/add-client', [GrupoController::class, 'addClient'])->name('grupos.add-client');
+    Route::delete('/grupos/{grupo}/remove-client/{cliente}', [GrupoController::class, 'removeClient'])->name('grupos.remove-client');
     Route::get('/savings', [SavingsController::class, 'index'])->name('savings.index');
     Route::post('/savings', [SavingsController::class, 'store'])->name('savings.store');
     Route::get('/savings/export', [SavingsController::class, 'exportPdf'])->name('savings.export');

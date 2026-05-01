@@ -2,7 +2,7 @@
 <html>
 <head>
     <meta charset="utf-8">
-    <title>Directorio de Clientes</title>
+    <title>Cartera Grupal</title>
     <style>
         body {
             font-family: 'Helvetica', 'Arial', sans-serif;
@@ -69,17 +69,6 @@
             padding: 8px 12px !important;
             font-size: 10px;
         }
-        .section-title {
-            font-size: 11px;
-            font-weight: bold;
-            color: #0f172a;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            margin-bottom: 15px;
-            border-left: 4px solid #0f172a;
-            padding-left: 10px;
-            margin-top: 30px;
-        }
         table.data-table {
             width: 100%;
             border-collapse: collapse;
@@ -114,10 +103,10 @@
             <tr>
                 <td>
                     <h1 class="business-name">AGC Servicios Financieros</h1>
-                    <div class="doc-type">Directorio General de Clientes</div>
+                    <div class="doc-type">Reporte de Cartera Grupal</div>
                 </td>
                 <td class="meta-right">
-                    BASE DE DATOS OPERATIVA<br>
+                    DOCUMENTO OPERATIVO<br>
                     <span style="color: #cbd5e1;">Generado: {{ date('d/m/Y H:i') }}</span>
                 </td>
             </tr>
@@ -125,11 +114,10 @@
     </div>
 
     <div class="subject-header">
-        <div class="subject-name">Base de Datos de Acreditados</div>
-        <div class="subject-sub">TOTAL DE REGISTROS: {{ count($customers) }} CLIENTES ACTIVOS</div>
+        <div class="subject-name">Acreditados - Cartera Grupal</div>
+        <div class="subject-sub">TOTAL DE REGISTROS: {{ count($customers) }} CLIENTES ASIGNADOS A GRUPO</div>
     </div>
 
-    <div class="section-title">Listado de Carteras</div>
     <table class="data-table">
         <thead>
             <tr>
@@ -143,20 +131,12 @@
             </tr>
         </thead>
         <tbody>
-            @php 
-                $currentGroupId = -1; // -1 to trigger header for the first item (Individual)
-                $isGroupedStarted = false;
-            @endphp
+            @php $currentGroupId = null; @endphp
             @foreach($customers as $customer)
-                @if($customer->id_grupo === null && $currentGroupId === -1)
-                    <tr class="group-header-row">
-                        <td colspan="7" class="group-name">CARTERA INDIVIDUAL</td>
-                    </tr>
-                    @php $currentGroupId = null; @endphp
-                @elseif($customer->id_grupo !== null && $currentGroupId !== $customer->id_grupo)
+                @if($currentGroupId !== $customer->id_grupo)
                     <tr class="group-header-row">
                         <td colspan="7" class="group-name">
-                            GRUPO: {{ $customer->grupo ? $customer->grupo->nombre : 'SIN NOMBRE' }}
+                            GRUPO: {{ $customer->grupo ? $customer->grupo->nombre : 'SIN GRUPO ASIGNADO' }}
                         </td>
                     </tr>
                     @php $currentGroupId = $customer->id_grupo; @endphp

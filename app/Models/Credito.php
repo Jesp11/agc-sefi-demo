@@ -26,6 +26,7 @@ class Credito extends Model
         'total',
         'valor_ficha',
         'id_asesor',
+        'tipo',
     ];
 
     public function cliente(): BelongsTo

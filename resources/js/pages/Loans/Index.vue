@@ -3,13 +3,17 @@ import { ref, computed } from 'vue';
 import { Head, Link, useForm } from '@inertiajs/vue3';
 import { 
     Plus, Search, Download, 
-    Calendar, ChevronRight, Phone, Wallet, X, CheckCircle2
+    Calendar, ChevronRight, Phone, Wallet, X, CheckCircle2,
+    TrendingUp, ArrowDownCircle, ArrowUpCircle, Users, RotateCcw, Filter
 } from 'lucide-vue-next';
 import { dashboard as dashboardRoute } from '@/routes';
 import loanRoutes from '@/routes/loans';
 import paymentRoutes from '@/routes/payments';
 import type { BreadcrumbItem } from '@/types';
 import AppLayout from '@/layouts/AppLayout.vue';
+import SearchableSelect from '@/Components/SearchableSelect.vue';
+import { router } from '@inertiajs/vue3';
+import { watch } from 'vue';
 
 interface Loan {
     id: number;
@@ -28,7 +32,14 @@ interface Loan {
 
 const props = defineProps<{
     loans: Loan[];
-    filters: { search?: string };
+    stats: {
+        total_cartera: number;
+        total_cobrado: number;
+        total_pendiente: number;
+        clientes_activos: number;
+    };
+    asesores: Array<{ id_asesor: number, nombre: string }>;
+    filters: { search?: string, id_asesor?: string, status?: string, from_date?: string, to_date?: string };
 }>();
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -37,16 +48,37 @@ const breadcrumbs: BreadcrumbItem[] = [
 ];
 
 const searchQuery = ref(props.filters.search || '');
+const selectedAsesor = ref(props.filters.id_asesor || '');
+const selectedStatus = ref(props.filters.status || '');
+const fromDate = ref(props.filters.from_date || '');
+const toDate = ref(props.filters.to_date || '');
 
-const filteredLoans = computed(() => {
-    if (!searchQuery.value) return props.loans;
-    const query = searchQuery.value.toLowerCase();
-    return props.loans.filter(l => 
-        l.customer?.nombre?.toLowerCase().includes(query) || 
-        l.customer?.telefono?.includes(query) ||
-        l.id.toString().includes(query)
-    );
+const applyFilters = () => {
+    router.get('/loans', {
+        search: searchQuery.value,
+        id_asesor: selectedAsesor.value,
+        status: selectedStatus.value,
+        from_date: fromDate.value,
+        to_date: toDate.value
+    }, { preserveState: true, replace: true });
+};
+
+watch([selectedAsesor, selectedStatus, fromDate, toDate], () => {
+    applyFilters();
 });
+
+const showFilters = ref(!!(props.filters.id_asesor || props.filters.status || props.filters.from_date || props.filters.to_date));
+
+const clearFilters = () => {
+    searchQuery.value = '';
+    selectedAsesor.value = '';
+    selectedStatus.value = '';
+    fromDate.value = '';
+    toDate.value = '';
+    router.get('/loans', {}, { preserveState: true, replace: true });
+};
+
+const filteredLoans = computed(() => props.loans);
 
 const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('es-MX', {
@@ -105,16 +137,121 @@ const submitPayment = () => {
                 </Link>
             </header>
 
-            <!-- Search Bar -->
-            <div class="relative mb-10">
-                <Search class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" :size="20" />
-                <input 
-                    v-model="searchQuery"
-                    type="text" 
-                    placeholder="Buscar por cliente, teléfono o ID..."
-                    class="w-full pl-12 pr-6 py-4 bg-white border border-slate-200 rounded-xl outline-none focus:border-slate-900 transition-all text-sm font-medium text-slate-900 shadow-sm"
-                />
+            <!-- Statistics Cards -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-12">
+                <div class="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="p-2 bg-emerald-50 text-emerald-600 rounded-lg">
+                            <ArrowDownCircle :size="18" />
+                        </div>
+                        <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Total Cobrado</span>
+                    </div>
+                    <div class="text-2xl font-black text-emerald-600">{{ formatCurrency(stats.total_cobrado) }}</div>
+                    <p class="text-[10px] text-emerald-600/60 font-medium mt-1 italic">Recuperación del periodo</p>
+                </div>
+
+                <div class="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="p-2 bg-amber-50 text-amber-600 rounded-lg">
+                            <ArrowUpCircle :size="18" />
+                        </div>
+                        <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Por Cobrar</span>
+                    </div>
+                    <div class="text-2xl font-black text-amber-600">{{ formatCurrency(stats.total_pendiente) }}</div>
+                    <p class="text-[10px] text-amber-600/60 font-medium mt-1 italic">Faltante para cumplir meta</p>
+                </div>
             </div>
+
+            <!-- Main Search & Filter Toggle -->
+            <div class="flex flex-wrap items-center gap-4 mb-6">
+                <div class="flex-1 min-w-[300px] relative">
+                    <Search class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" :size="18" />
+                    <input 
+                        v-model="searchQuery"
+                        @keyup.enter="applyFilters"
+                        type="text" 
+                        placeholder="Buscar por cliente, teléfono o ID..."
+                        class="w-full pl-12 pr-4 py-3.5 bg-white border border-slate-200 rounded-2xl outline-none focus:border-slate-900 transition-all text-sm font-bold text-slate-900 shadow-sm"
+                    />
+                </div>
+                
+                <button 
+                    @click="showFilters = !showFilters"
+                    class="px-6 py-3.5 rounded-2xl border transition-all flex items-center gap-2 text-sm font-bold shadow-sm active:scale-95"
+                    :class="showFilters 
+                        ? 'bg-slate-900 text-white border-slate-900' 
+                        : 'bg-white text-slate-600 border-slate-200 hover:border-slate-400'"
+                >
+                    <Filter :size="18" />
+                    {{ showFilters ? 'Ocultar Filtros' : 'Filtros Avanzados' }}
+                    <span v-if="!showFilters && (selectedAsesor || selectedStatus || fromDate || toDate)" class="w-2 h-2 bg-emerald-500 rounded-full"></span>
+                </button>
+
+                <button 
+                    @click="clearFilters"
+                    class="p-3.5 bg-white border border-slate-200 text-slate-400 rounded-2xl hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-all active:scale-95 flex items-center justify-center shadow-sm"
+                    title="Borrar Filtros"
+                >
+                    <RotateCcw :size="20" />
+                </button>
+            </div>
+
+            <!-- Collapsible Advanced Filters -->
+            <transition
+                enter-active-class="transition duration-200 ease-out"
+                enter-from-class="transform -translate-y-4 opacity-0"
+                enter-to-class="transform translate-y-0 opacity-100"
+                leave-active-class="transition duration-150 ease-in"
+                leave-from-class="transform translate-y-0 opacity-100"
+                leave-to-class="transform -translate-y-4 opacity-0"
+            >
+                <div v-if="showFilters" class="bg-slate-50/50 p-6 rounded-[2rem] border border-slate-100 mb-10">
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                        <!-- Asesor -->
+                        <div class="space-y-2">
+                            <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Asesor Responsable</label>
+                            <SearchableSelect 
+                                v-model="selectedAsesor"
+                                :options="asesores.map(a => ({ id: a.id_asesor, label: a.nombre }))"
+                                placeholder="Todos los Asesores"
+                                search-placeholder="Buscar asesor..."
+                            />
+                        </div>
+
+                        <!-- Estatus -->
+                        <div class="space-y-2">
+                            <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Estatus del Crédito</label>
+                            <SearchableSelect 
+                                v-model="selectedStatus"
+                                :options="[
+                                    { id: 'pendiente', label: 'Pendientes' },
+                                    { id: 'liquidado', label: 'Liquidados' }
+                                ]"
+                                placeholder="Todos los Estatus"
+                            />
+                        </div>
+
+                        <!-- Fechas -->
+                        <div class="space-y-2">
+                            <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Fecha Desde</label>
+                            <input 
+                                v-model="fromDate"
+                                type="date" 
+                                class="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl outline-none focus:border-slate-900 transition-all text-sm font-bold text-slate-900 shadow-sm"
+                            />
+                        </div>
+
+                        <div class="space-y-2">
+                            <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Fecha Hasta</label>
+                            <input 
+                                v-model="toDate"
+                                type="date" 
+                                class="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl outline-none focus:border-slate-900 transition-all text-sm font-bold text-slate-900 shadow-sm"
+                            />
+                        </div>
+                    </div>
+                </div>
+            </transition>
 
             <!-- Tabla de Datos -->
             <div class="bg-white border border-slate-100 rounded-xl shadow-sm overflow-x-auto min-h-[500px] pb-4">
@@ -131,7 +268,8 @@ const submitPayment = () => {
                             <th class="px-6 py-4 text-[9px] font-bold text-slate-400 uppercase tracking-widest text-right w-28">Interés</th>
                             <th class="px-6 py-4 text-[9px] font-bold text-slate-400 uppercase tracking-widest text-right w-28">Total</th>
                             <th class="px-6 py-4 text-[9px] font-bold text-slate-400 uppercase tracking-widest w-32">Asesor</th>
-                            <th class="px-6 py-4 text-[9px] font-bold text-slate-400 uppercase tracking-widest text-right w-40">Acción</th>
+                            <th class="px-6 py-4 text-[9px] font-bold text-slate-400 uppercase tracking-widest text-center w-32">Estatus</th>
+                            <th class="px-6 py-4 text-[9px] font-bold text-slate-400 uppercase tracking-widest text-right w-48">Acciones</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-50">
@@ -169,21 +307,29 @@ const submitPayment = () => {
                             <td class="px-6 py-5">
                                 <div class="text-[10px] font-bold text-slate-400 truncate">{{ loan.asesor }}</div>
                             </td>
+                            <td class="px-6 py-5 text-center">
+                                <span v-if="loan.completado" class="px-2.5 py-1 bg-emerald-50 text-emerald-600 text-[8px] font-black uppercase tracking-widest rounded-full border border-emerald-100 shadow-sm inline-flex items-center gap-1">
+                                    <CheckCircle2 :size="10" />
+                                    Liquidado
+                                </span>
+                                <span v-else class="px-2.5 py-1 bg-amber-50 text-amber-600 text-[8px] font-black uppercase tracking-widest rounded-full border border-amber-100 shadow-sm inline-flex items-center gap-1">
+                                    <Calendar :size="10" />
+                                    Pendiente
+                                </span>
+                            </td>
                             <td class="px-6 py-5 text-right">
-                                <div class="flex items-center justify-end gap-3">
-                                    <span v-if="loan.completado" class="px-2 py-1 bg-emerald-50 text-emerald-600 text-[8px] font-black uppercase tracking-widest rounded border border-emerald-100">
-                                        Liquidado
-                                    </span>
+                                <div class="flex items-center justify-end gap-2">
                                     <button 
-                                        v-else
+                                        v-if="!loan.completado"
                                         @click="openPaymentModal(loan)"
-                                        class="px-3 py-1.5 bg-emerald-50 text-emerald-600 text-[9px] font-black uppercase tracking-widest rounded border border-emerald-100 hover:bg-emerald-600 hover:text-white transition-all"
+                                        class="px-3 py-1.5 bg-emerald-600 text-white text-[9px] font-bold uppercase tracking-widest rounded-lg hover:bg-emerald-700 transition-all shadow-sm flex items-center gap-1.5"
                                     >
+                                        <Wallet :size="12" />
                                         Cobrar
                                     </button>
                                     <Link 
                                         :href="loanRoutes.show({ loan: loan.id }).url"
-                                        class="text-[9px] font-black text-slate-900 uppercase tracking-tighter hover:underline"
+                                        class="px-3 py-1.5 bg-slate-900 text-white text-[9px] font-bold uppercase tracking-widest rounded-lg hover:bg-slate-800 transition-all shadow-sm"
                                     >
                                         Ver Detalle
                                     </Link>

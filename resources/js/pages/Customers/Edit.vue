@@ -8,6 +8,7 @@ import { dashboard as dashboardRoute } from '@/routes';
 import customersRoutes from '@/routes/customers';
 import type { BreadcrumbItem } from '@/types';
 import AppLayout from '@/layouts/AppLayout.vue';
+import SearchableSelect from '@/Components/SearchableSelect.vue';
 
 interface Direccion {
     id_direccion?: number;
@@ -46,13 +47,16 @@ const props = defineProps<{
         referencias: Referencia[];
         avales: Aval[];
         id_asesor: number | null;
+        id_grupo: number | null;
     };
     asesores: Array<{ id_asesor: number, nombre: string }>;
+    grupos: Array<{ id_grupo: number, nombre: string }>;
 }>();
 
 const form = useForm({
     nombre: props.customer.nombre,
     id_asesor: props.customer.id_asesor,
+    id_grupo: props.customer.id_grupo,
     curp: props.customer.curp,
     clave_elector: props.customer.clave_elector,
     telefono: props.customer.telefono,
@@ -155,16 +159,24 @@ const breadcrumbs: BreadcrumbItem[] = [
                             </div>
                             <div class="space-y-2">
                                 <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1">Asesor Permanente</label>
-                                <div class="relative">
-                                    <select v-model="form.id_asesor" class="w-full px-4 py-3 bg-slate-50 border border-slate-200 focus:border-slate-900 focus:bg-white rounded-lg outline-none transition-all text-sm font-semibold appearance-none pr-10">
-                                        <option value="">Seleccionar Asesor</option>
-                                        <option v-for="asesor in asesores" :key="asesor.id_asesor" :value="asesor.id_asesor">
-                                            {{ asesor.nombre }}
-                                        </option>
-                                    </select>
-                                    <ChevronDown class="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" :size="16" />
-                                </div>
+                                <SearchableSelect 
+                                    v-model="form.id_asesor"
+                                    :options="asesores.map(a => ({ id: a.id_asesor, label: a.nombre }))"
+                                    placeholder="Seleccionar Asesor"
+                                    search-placeholder="Buscar asesor..."
+                                    empty-text="No se encontraron asesores"
+                                />
                             </div>
+                        </div>
+                        <div class="space-y-2">
+                            <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1">Asignación de Grupo</label>
+                            <SearchableSelect 
+                                v-model="form.id_grupo"
+                                :options="grupos.map(g => ({ id: g.id_grupo, label: g.nombre }))"
+                                placeholder="Ninguno (Cartera Individual)"
+                                search-placeholder="Buscar grupo..."
+                                empty-text="No se encontraron grupos"
+                            />
                         </div>
                         <div class="space-y-2">
                             <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1">Teléfono</label>

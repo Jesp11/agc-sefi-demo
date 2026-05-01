@@ -17,11 +17,6 @@ interface Direccion {
     pivot: { tipo: 'casa' | 'trabajo' };
 }
 
-interface Grupo {
-    id_grupo: number;
-    nombre: string;
-}
-
 interface Customer {
     id_cliente: number;
     nombre: string;
@@ -29,7 +24,6 @@ interface Customer {
     clave_elector: string;
     telefono: string;
     ocupacion: string;
-    grupo?: Grupo | null;
     direcciones: Direccion[];
     referencias: any[];
     avales: any[];
@@ -41,7 +35,7 @@ const props = defineProps<{
 
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Dashboard', href: dashboardRoute().url },
-    { title: 'Directorio de Clientes', href: '#' },
+    { title: 'Cartera Individual', href: '#' },
 ];
 
 const searchQuery = ref('');
@@ -58,7 +52,7 @@ const filteredCustomers = computed(() => {
 </script>
 
 <template>
-    <Head title="Clientes" />
+    <Head title="Cartera Individual" />
 
     <AppLayout :breadcrumbs="breadcrumbs">
         <div class="w-full mx-auto p-8 lg:p-12">
@@ -66,17 +60,17 @@ const filteredCustomers = computed(() => {
             <!-- Header Minimalista -->
             <header class="flex items-center justify-between gap-8 mb-12">
                 <div>
-                    <h1 class="text-3xl font-bold text-slate-900 tracking-tight">Directorio de Clientes</h1>
-                    <p class="text-sm text-slate-500 font-medium mt-1">Directorio completo de clientes (Individuales y Grupales).</p>
+                    <h1 class="text-3xl font-bold text-slate-900 tracking-tight">Cartera Individual</h1>
+                    <p class="text-sm text-slate-500 font-medium mt-1">Gestión de expedientes de clientes sin grupo.</p>
                 </div>
                 
                 <div class="flex items-center gap-3">
                     <a 
-                        :href="customersRoutes.exportPdf().url" 
+                        href="/customers/export-individual" 
                         target="_blank"
-                        class="px-5 py-2.5 bg-white text-slate-700 border border-slate-200 font-bold rounded-lg hover:bg-slate-50 transition-all text-xs"
+                        class="px-5 py-2.5 bg-white text-slate-700 border border-slate-200 font-bold rounded-lg hover:bg-slate-50 transition-all text-xs flex items-center gap-2"
                     >
-                        <Download :size="16" class="mr-2" />
+                        <Download :size="16" />
                         Exportar PDF
                     </a>
 
@@ -108,30 +102,25 @@ const filteredCustomers = computed(() => {
                         <tr class="bg-slate-50/50 border-b border-slate-100">
                             <th class="w-20 px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">ID</th>
                             <th class="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Nombre del Cliente</th>
-                            <th class="w-48 px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Grupo</th>
+                            <th class="w-48 px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">CURP</th>
                             <th class="w-40 px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Teléfono</th>
                             <th class="w-40 px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Ocupación</th>
                             <th class="w-32 px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-right">Acciones</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-50">
-                        <tr v-for="customer in filteredCustomers" :key="customer.id_cliente" class="hover:bg-slate-50/50 transition-colors">
+                        <tr v-for="customer in filteredCustomers" :key="customer.id_cliente" class="hover:bg-slate-50/50 transition-colors group">
                             <td class="px-6 py-5">
-                                <span class="text-xs font-bold text-slate-400 font-mono">#{{ customer.id_cliente }}</span>
+                                <span class="text-xs font-bold text-slate-300 font-mono">#{{ customer.id_cliente }}</span>
                             </td>
                             <td class="px-6 py-5">
                                 <div class="flex flex-col">
-                                    <div class="text-sm font-bold text-slate-900 uppercase tracking-tight">{{ customer.nombre }}</div>
-                                    <div class="text-xs font-semibold text-slate-600 font-mono mt-0.5">{{ customer.curp || '---' }}</div>
+                                    <span class="text-sm font-bold text-slate-900 uppercase tracking-tight">{{ customer.nombre }}</span>
+                                    <span class="text-[10px] text-slate-400 font-mono font-bold tracking-tight mt-0.5">{{ customer.curp || 'SIN CURP REGISTRADA' }}</span>
                                 </div>
                             </td>
                             <td class="px-6 py-5">
-                                <div v-if="customer.grupo" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 text-[10px] font-bold uppercase tracking-wider">
-                                    {{ customer.grupo.nombre }}
-                                </div>
-                                <div v-else class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-100 text-slate-500 text-[10px] font-bold uppercase tracking-wider">
-                                    Individual
-                                </div>
+                                <div class="text-xs font-semibold text-slate-600 font-mono">{{ customer.curp || '---' }}</div>
                             </td>
                             <td class="px-6 py-5">
                                 <div class="text-sm font-bold text-slate-900 flex items-center gap-2">
@@ -154,8 +143,12 @@ const filteredCustomers = computed(() => {
                             </td>
                         </tr>
                         <tr v-if="filteredCustomers.length === 0">
-                            <td colspan="6" class="py-20 text-center">
-                                <p class="text-slate-400 font-bold italic text-sm tracking-wider">No se encontraron registros que coincidan con la búsqueda.</p>
+                            <td colspan="6" class="py-32 text-center">
+                                <div class="max-w-xs mx-auto text-slate-400">
+                                    <Search :size="48" class="mx-auto mb-4 opacity-10" />
+                                    <p class="text-sm font-bold tracking-wider text-slate-900">Sin resultados</p>
+                                    <p class="text-xs mt-2 text-slate-500 font-medium leading-relaxed">No se encontraron clientes individuales registrados.</p>
+                                </div>
                             </td>
                         </tr>
                     </tbody>

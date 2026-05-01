@@ -16,8 +16,18 @@ class LoanController extends Controller
 {
     public function index(Request $request)
     {
-        $query = Credito::with(['cliente', 'asesor'])->withSum('pagos', 'monto');
+        // Get the latest loan ID for each customer to work with active/recent cycles
+        $latestLoanIds = Credito::select(DB::raw('MAX(id_credito) as id'))
+            ->groupBy('id_cliente')
+            ->pluck('id');
+
+        $baseQuery = Credito::whereIn('id_credito', $latestLoanIds)
+            ->with(['cliente', 'asesor'])
+            ->withSum('pagos', 'monto');
+
+        $query = clone $baseQuery;
         
+        // Filtering
         if ($search = $request->query('search')) {
             $query->where(function($q) use ($search) {
                 $q->where('id_credito', 'like', "%{$search}%")
@@ -27,8 +37,73 @@ class LoanController extends Controller
             });
         }
 
+        if ($asesorId = $request->query('id_asesor')) {
+            $query->where('id_asesor', $asesorId);
+        }
+
+        if ($status = $request->query('status')) {
+            if ($status === 'pendiente') {
+                $query->whereRaw('total > (SELECT COALESCE(SUM(monto), 0) FROM pagos WHERE pagos.id_credito = creditos.id_credito)');
+            } elseif ($status === 'liquidado') {
+                $query->whereRaw('total <= (SELECT COALESCE(SUM(monto), 0) FROM pagos WHERE pagos.id_credito = creditos.id_credito)');
+            }
+        }
+
+        if ($fromDate = $request->query('from_date')) {
+            $query->whereDate('fecha', '>=', $fromDate);
+        }
+
+        if ($toDate = $request->query('to_date')) {
+            $query->whereDate('fecha', '<=', $toDate);
+        }
+
+        // Calculate statistics based on FILTERED results
+        $filteredLoans = (clone $query)->get();
+        $loanIds = $filteredLoans->pluck('id_credito');
+
+        // Total payments made in the selected period for the filtered loans
+        $paymentsInPeriod = Pago::whereIn('id_credito', $loanIds);
+        if ($fromDate) $paymentsInPeriod->whereDate('fecha_pago', '>=', $fromDate);
+        if ($toDate) $paymentsInPeriod->whereDate('fecha_pago', '<=', $toDate);
+        $totalCobradoPeriodo = $paymentsInPeriod->sum('monto');
+
+        // Calculate Collection Goal (Meta) based on payment days in the range
+        $metaCobranza = 0;
+        if ($fromDate && $toDate) {
+            $start = Carbon::parse($fromDate);
+            $end = Carbon::parse($toDate);
+            $daysInRange = [];
+            $current = $start->copy();
+            while ($current <= $end) {
+                $daysInRange[] = $current->dayOfWeek;
+                $current->addDay();
+                if (count($daysInRange) >= 7) break; // Optimization: all days included
+            }
+
+            $metaCobranza = $filteredLoans->filter(function($l) use ($daysInRange) {
+                // Loan is active (not fully paid)
+                $is_active = ($l->pagos_sum_monto ?? 0) < $l->total;
+                if (!$is_active) return false;
+                
+                // Payment day (dayOfWeek of start date) is in the range
+                $loanDay = Carbon::parse($l->fecha)->dayOfWeek;
+                return in_array($loanDay, $daysInRange);
+            })->sum('valor_ficha');
+        } else {
+            // Default: Total pending balance if no date filter
+            $metaCobranza = $filteredLoans->sum(fn($l) => $l->total - ($l->pagos_sum_monto ?? 0));
+        }
+
+        $stats = [
+            'total_cartera' => $filteredLoans->sum('total'),
+            'total_cobrado' => $fromDate || $toDate ? $totalCobradoPeriodo : $filteredLoans->sum('pagos_sum_monto'),
+            'total_pendiente' => $fromDate || $toDate ? max(0, $metaCobranza - $totalCobradoPeriodo) : $filteredLoans->sum(fn($l) => $l->total - ($l->pagos_sum_monto ?? 0)),
+            'clientes_activos' => $filteredLoans->filter(fn($l) => ($l->pagos_sum_monto ?? 0) < $l->total)->count(),
+            'meta_periodo' => $metaCobranza,
+        ];
+
         return Inertia::render('Loans/Index', [
-            'loans' => $query->orderBy('fecha', 'desc')->get()->map(function($loan) {
+            'loans' => $query->orderBy('id_credito', 'desc')->get()->map(function($loan) {
                 $days = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
                 $dia_pago = $loan->fecha ? $days[Carbon::parse($loan->fecha)->dayOfWeek] : 'N/A';
                 
@@ -51,7 +126,9 @@ class LoanController extends Controller
                     'asesor' => $loan->asesor ? $loan->asesor->nombre : 'Sin asesor',
                 ];
             }),
-            'filters' => $request->only(['search'])
+            'stats' => $stats,
+            'asesores' => Asesor::orderBy('nombre')->get(['id_asesor', 'nombre']),
+            'filters' => $request->only(['search', 'id_asesor', 'status', 'from_date', 'to_date'])
         ]);
     }
 

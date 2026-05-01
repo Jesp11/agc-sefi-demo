@@ -2,7 +2,7 @@
 <html>
 <head>
     <meta charset="utf-8">
-    <title>Directorio de Clientes</title>
+    <title>Cartera Individual</title>
     <style>
         body {
             font-family: 'Helvetica', 'Arial', sans-serif;
@@ -57,18 +57,6 @@
             text-transform: uppercase;
             letter-spacing: 1.5px;
         }
-        .group-header-row {
-            background-color: #f1f5f9;
-            border-top: 2px solid #e2e8f0;
-        }
-        .group-name {
-            font-weight: 800;
-            color: #0f172a;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            padding: 8px 12px !important;
-            font-size: 10px;
-        }
         .section-title {
             font-size: 11px;
             font-weight: bold;
@@ -114,10 +102,10 @@
             <tr>
                 <td>
                     <h1 class="business-name">AGC Servicios Financieros</h1>
-                    <div class="doc-type">Directorio General de Clientes</div>
+                    <div class="doc-type">Reporte de Cartera Individual</div>
                 </td>
                 <td class="meta-right">
-                    BASE DE DATOS OPERATIVA<br>
+                    DOCUMENTO OPERATIVO<br>
                     <span style="color: #cbd5e1;">Generado: {{ date('d/m/Y H:i') }}</span>
                 </td>
             </tr>
@@ -125,11 +113,10 @@
     </div>
 
     <div class="subject-header">
-        <div class="subject-name">Base de Datos de Acreditados</div>
+        <div class="subject-name">Acreditados - Cartera Individual</div>
         <div class="subject-sub">TOTAL DE REGISTROS: {{ count($customers) }} CLIENTES ACTIVOS</div>
     </div>
 
-    <div class="section-title">Listado de Carteras</div>
     <table class="data-table">
         <thead>
             <tr>
@@ -143,37 +130,20 @@
             </tr>
         </thead>
         <tbody>
-            @php 
-                $currentGroupId = -1; // -1 to trigger header for the first item (Individual)
-                $isGroupedStarted = false;
-            @endphp
             @foreach($customers as $customer)
-                @if($customer->id_grupo === null && $currentGroupId === -1)
-                    <tr class="group-header-row">
-                        <td colspan="7" class="group-name">CARTERA INDIVIDUAL</td>
-                    </tr>
-                    @php $currentGroupId = null; @endphp
-                @elseif($customer->id_grupo !== null && $currentGroupId !== $customer->id_grupo)
-                    <tr class="group-header-row">
-                        <td colspan="7" class="group-name">
-                            GRUPO: {{ $customer->grupo ? $customer->grupo->nombre : 'SIN NOMBRE' }}
-                        </td>
-                    </tr>
-                    @php $currentGroupId = $customer->id_grupo; @endphp
-                @endif
-                <tr>
-                    <td style="color: #94a3b8;">#{{ $customer->id_cliente }}</td>
-                    <td style="font-weight: bold; color: #0f172a;">{{ $customer->nombre }}</td>
-                    <td style="font-family: monospace; font-size: 8px;">{{ $customer->curp ?: '---' }}</td>
-                    <td style="font-size: 9px; color: #64748b;">
-                        {{ $customer->direcciones->firstWhere('pivot.tipo', 'casa')->direccion ?? 'Sin dirección' }}
-                    </td>
-                    <td style="font-weight: bold;">{{ $customer->telefono ?: '---' }}</td>
-                    <td align="center" style="font-weight: bold; color: #6366f1;">
-                        {{ $customer->creditos->max('ciclo') ?? 0 }}
-                    </td>
-                    <td style="font-size: 9px; font-weight: bold;">{{ $customer->asesor ? $customer->asesor->nombre : 'GENERAL' }}</td>
-                </tr>
+            <tr>
+                <td style="color: #94a3b8;">#{{ $customer->id_cliente }}</td>
+                <td style="font-weight: bold; color: #0f172a;">{{ $customer->nombre }}</td>
+                <td style="font-family: monospace; font-size: 8px;">{{ $customer->curp ?: '---' }}</td>
+                <td style="font-size: 9px; color: #64748b;">
+                    {{ $customer->direcciones->firstWhere('pivot.tipo', 'casa')->direccion ?? 'Sin dirección' }}
+                </td>
+                <td style="font-weight: bold;">{{ $customer->telefono ?: '---' }}</td>
+                <td align="center" style="font-weight: bold; color: #6366f1;">
+                    {{ $customer->creditos->max('ciclo') ?? 0 }}
+                </td>
+                <td style="font-size: 9px; font-weight: bold;">{{ $customer->asesor ? $customer->asesor->nombre : 'GENERAL' }}</td>
+            </tr>
             @endforeach
         </tbody>
     </table>
