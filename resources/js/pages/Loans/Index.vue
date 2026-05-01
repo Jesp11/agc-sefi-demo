@@ -2,7 +2,7 @@
 import { reactive, watch } from 'vue';
 import { watchDebounced } from '@vueuse/core';
 import { Head, Link, router } from '@inertiajs/vue3';
-import { Landmark, ArrowLeft, Search, Wallet, ChevronRight, Filter, Calendar } from 'lucide-vue-next';
+import { Landmark, ArrowLeft, Search, Wallet, ChevronRight, Filter, Calendar, CreditCard } from 'lucide-vue-next';
 import { dashboard as dashboardRoute } from '@/routes';
 import loanRoutes from '@/routes/loans';
 import AppLayout from '@/layouts/AppLayout.vue';
@@ -11,25 +11,21 @@ import type { BreadcrumbItem } from '@/types';
 const props = defineProps<{
     loans: Array<{
         id: number;
-        customer: { name: string };
+        customer: { nombre: string };
         amount: number;
-        interest_rate: number;
-        outstanding_balance: number;
-        status: string;
-        next_installment?: {
-            due_date: string;
-            amount: number;
-        };
+        total: number;
+        fecha: string;
+        ciclo: number;
+        plazo: number;
+        asesor: string;
     }>,
     filters: {
         search?: string;
-        status?: string;
     }
 }>();
 
 const form = reactive({
     search: props.filters?.search || '',
-    status: props.filters?.status || 'all',
 });
 
 watchDebounced(
@@ -50,14 +46,6 @@ const formatCurrency = (value: number) => {
     }).format(value);
 };
 
-const getStatusClass = (status: string) => {
-    switch(status) {
-        case 'active': return 'bg-green-100 text-green-700 border-green-200';
-        case 'paid': return 'bg-blue-100 text-blue-700 border-blue-200';
-        default: return 'bg-slate-100 text-slate-700 border-slate-200';
-    }
-};
-
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Dashboard', href: dashboardRoute().url },
     { title: 'Préstamos', href: loanRoutes.index().url },
@@ -68,125 +56,85 @@ const breadcrumbs: BreadcrumbItem[] = [
     <Head title="Cartera de Préstamos" />
 
     <AppLayout :breadcrumbs="breadcrumbs">
-        <div class="p-6 max-w-7xl mx-auto">
-            <header class="mb-8 flex flex-col md:flex-row md:items-end md:justify-between gap-4">
+        <div class="p-8 max-w-[1600px] mx-auto pb-24">
+            <header class="mb-10 flex flex-col md:flex-row md:items-center md:justify-between gap-6">
                 <div>
-                    <h1 class="text-3xl font-bold text-slate-900 tracking-tight">Cartera de Préstamos</h1>
-                    <p class="text-slate-500">Listado general de créditos y estado de cuenta</p>
+                    <h1 class="text-4xl font-black text-slate-900 tracking-tight mb-2">Cartera de Préstamos</h1>
+                    <p class="text-slate-500 font-medium">Control total de créditos otorgados, ciclos y cobranza.</p>
                 </div>
                 <Link 
                     :href="loanRoutes.create().url"
-                    class="inline-flex items-center px-6 py-3 bg-teal-600 text-white font-bold rounded-2xl hover:bg-teal-500 transition-all gap-2 shadow-lg shadow-teal-100"
+                    class="inline-flex items-center px-10 py-4 bg-gradient-to-r from-teal-600 to-emerald-600 text-white font-black rounded-2xl hover:from-teal-700 hover:to-emerald-700 transition-all gap-2 shadow-xl shadow-teal-100 active:scale-95"
                 >
-                    <CreditCard :size="18" />
+                    <CreditCard :size="20" />
                     Nuevo Préstamo
                 </Link>
             </header>
 
-            <!-- Filters Row -->
-            <div class="mb-6 bg-white p-4 rounded-3xl border border-slate-100 shadow-sm flex flex-col lg:flex-row gap-4">
-                <!-- Search Box -->
-                <div class="relative flex-1">
-                    <Search class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" :size="20" />
-                    <input 
-                        v-model="form.search"
-                        type="text" 
-                        placeholder="Buscar por cliente o ID de préstamo..."
-                        class="w-full pl-12 pr-4 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none transition-all text-sm font-medium"
-                    />
-                </div>
-                
-                <div class="flex items-center gap-4 w-full lg:w-auto">
-                    <!-- Status Filter -->
-                    <div class="relative min-w-[170px] flex-1 lg:flex-none">
-                        <Filter class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" :size="18" />
-                        <select 
-                            v-model="form.status"
-                            class="w-full pl-11 pr-10 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none transition-all text-sm font-bold text-slate-700 appearance-none cursor-pointer"
-                        >
-                            <option value="all">Todos los Estatus</option>
-                            <option value="active">Activos</option>
-                            <option value="paid">Pagados</option>
-                        </select>
-                        <ChevronRight class="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 rotate-90 pointer-events-none" :size="16" />
-                    </div>
-                </div>
+            <!-- Search Bar -->
+            <div class="relative mb-8">
+                <Search class="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400" :size="22" />
+                <input 
+                    v-model="form.search"
+                    type="text" 
+                    placeholder="Buscar por cliente o ID de crédito..."
+                    class="w-full pl-14 pr-6 py-5 bg-white border-2 border-slate-100 rounded-3xl focus:ring-4 focus:ring-teal-500/10 focus:border-teal-500 outline-none transition-all text-lg shadow-sm"
+                />
             </div>
 
             <!-- Loans List -->
-            <div class="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
+            <div class="bg-white rounded-[2.5rem] border border-slate-100 shadow-xl shadow-slate-200/50 overflow-hidden">
                 <table class="w-full text-left">
-                    <thead class="bg-slate-50 border-b border-slate-100">
+                    <thead class="bg-slate-50/50 border-b border-slate-100">
                         <tr>
-                            <th class="px-8 py-4 text-xs font-bold text-slate-500 uppercase tracking-widest text-center">ID</th>
-                            <th class="px-8 py-4 text-xs font-bold text-slate-500 uppercase tracking-widest">Cliente</th>
-                            <th class="px-8 py-4 text-xs font-bold text-slate-500 uppercase tracking-widest text-right">Monto Original</th>
-                            <th class="px-8 py-4 text-xs font-bold text-slate-500 uppercase tracking-widest text-right">Saldo Pendiente</th>
-                            <th class="px-8 py-4 text-xs font-bold text-slate-500 uppercase tracking-widest text-center">Progreso</th>
-                            <th class="px-8 py-4 text-xs font-bold text-slate-500 uppercase tracking-widest">Próxima</th>
-                            <th class="px-8 py-4 text-xs font-bold text-slate-500 uppercase tracking-widest">Estatus</th>
-                            <th class="px-8 py-4 text-xs font-bold text-slate-500 uppercase tracking-widest text-right">Acciones</th>
+                            <th class="px-8 py-6 text-xs font-black text-slate-400 uppercase tracking-widest">ID</th>
+                            <th class="px-8 py-6 text-xs font-black text-slate-400 uppercase tracking-widest">Acreditado</th>
+                            <th class="px-8 py-6 text-xs font-black text-slate-400 uppercase tracking-widest text-right">Monto</th>
+                            <th class="px-8 py-6 text-xs font-black text-slate-400 uppercase tracking-widest text-right">Total c/Int</th>
+                            <th class="px-8 py-6 text-xs font-black text-slate-400 uppercase tracking-widest text-center">Ciclo</th>
+                            <th class="px-8 py-6 text-xs font-black text-slate-400 uppercase tracking-widest">Fecha</th>
+                            <th class="px-8 py-6 text-xs font-black text-slate-400 uppercase tracking-widest text-right px-12">Acciones</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-50">
-                        <tr v-for="loan in loans" :key="loan.id" class="hover:bg-slate-50 transition-colors">
-                            <td class="px-8 py-5 text-center font-bold text-slate-400 font-mono">#{{ loan.id }}</td>
+                        <tr v-for="loan in loans" :key="loan.id" class="hover:bg-slate-50/80 transition-colors group">
                             <td class="px-8 py-5">
-                                <p class="font-bold text-slate-900">{{ loan.customer.name }}</p>
+                                <span class="bg-slate-100 text-slate-500 px-3 py-1 rounded-lg font-mono text-xs font-bold">#{{ loan.id }}</span>
                             </td>
-                            <td class="px-8 py-5 text-right text-slate-600">{{ formatCurrency(loan.amount) }}</td>
-                            <td class="px-8 py-5 text-right font-black text-slate-900">{{ formatCurrency(loan.outstanding_balance) }}</td>
-                            <td class="px-8 py-5 w-48">
-                                <div class="flex items-center gap-3">
-                                    <div class="flex-1 bg-slate-100 h-2 rounded-full overflow-hidden border border-slate-200">
-                                        <div 
-                                            class="bg-teal-500 h-full transition-all duration-700"
-                                            :style="{ width: Math.min(100, Math.round(((loan.amount * (1 + loan.interest_rate / 100)) - loan.outstanding_balance) / (loan.amount * (1 + loan.interest_rate / 100)) * 100)) + '%' }"
-                                        ></div>
-                                    </div>
-                                    <span class="text-[10px] font-bold text-slate-500 min-w-[30px]">
-                                        {{ Math.min(100, Math.round(((loan.amount * (1 + loan.interest_rate / 100)) - loan.outstanding_balance) / (loan.amount * (1 + loan.interest_rate / 100)) * 100)) }}%
-                                    </span>
+                            <td class="px-8 py-5">
+                                <p class="font-bold text-slate-900 text-lg">{{ loan.customer?.nombre || 'Desconocido' }}</p>
+                                <p class="text-xs text-slate-400 font-medium uppercase tracking-wider">Asesor: {{ loan.asesor }}</p>
+                            </td>
+                            <td class="px-8 py-5 text-right font-semibold text-slate-600">{{ formatCurrency(loan.amount) }}</td>
+                            <td class="px-8 py-5 text-right font-black text-slate-900 text-lg">{{ formatCurrency(loan.total) }}</td>
+                            <td class="px-8 py-5 text-center">
+                                <span class="inline-flex items-center justify-center w-8 h-8 bg-teal-50 text-teal-700 font-black rounded-full border border-teal-100">{{ loan.ciclo || 1 }}</span>
+                            </td>
+                            <td class="px-8 py-5">
+                                <div class="flex items-center text-slate-600 font-semibold">
+                                    <Calendar :size="16" class="mr-2 text-slate-400" />
+                                    {{ loan.fecha }}
                                 </div>
                             </td>
-                            <td class="px-8 py-5">
-                                <div v-if="loan.next_installment" class="flex flex-col">
-                                    <span class="text-sm font-bold text-slate-700">{{ loan.next_installment.due_date }}</span>
-                                    <span class="text-[10px] font-bold text-slate-400">{{ formatCurrency(loan.next_installment.amount) }}</span>
-                                </div>
-                                <span v-else class="text-xs text-slate-400 italic">Sin pagos</span>
-                            </td>
-                            <td class="px-8 py-5">
-                                <span :class="['px-3 py-1 text-[10px] font-bold rounded-full border', getStatusClass(loan.status)]">
-                                    {{ loan.status.toUpperCase() }}
-                                </span>
-                            </td>
-                            <td class="px-8 py-5 text-right">
+                            <td class="px-8 py-5 text-right px-12">
                                 <Link 
                                     :href="loanRoutes.show({ loan: loan.id }).url"
-                                    class="inline-flex items-center text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 px-4 py-2 rounded-xl text-xs font-bold transition-colors gap-2 whitespace-nowrap"
+                                    class="inline-flex items-center px-6 py-2 bg-slate-900 text-white text-xs font-black rounded-xl hover:bg-slate-800 transition-all gap-2 shadow-lg active:scale-95"
                                 >
                                     <Wallet :size="14" />
-                                    Pagar / Ver
+                                    Detalle / Cobro
                                 </Link>
                             </td>
                         </tr>
                     </tbody>
                 </table>
                 
-                <div v-if="loans.length === 0" class="p-16 text-center">
-                    <div class="mx-auto w-16 h-16 bg-slate-50 flex items-center justify-center rounded-full mb-4 border border-slate-100">
-                        <Search class="text-slate-400" :size="24" />
+                <div v-if="loans.length === 0" class="p-24 text-center">
+                    <div class="bg-slate-50 w-20 h-20 rounded-3xl flex items-center justify-center mx-auto mb-4">
+                        <Landmark :size="40" class="text-slate-200" />
                     </div>
-                    <h3 class="text-lg font-bold text-slate-900 mb-1">Sin Resultados</h3>
-                    <p class="text-slate-500 font-medium">No se encontraron préstamos que coincidan con los criterios de búsqueda.</p>
-                    <button 
-                        v-if="form.search || form.status !== 'all'"
-                        @click="form.search = ''; form.status = 'all';"
-                        class="mt-6 px-6 py-2.5 bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900 rounded-xl font-bold transition-colors text-sm"
-                    >
-                        Limpiar Filtros
-                    </button>
+                    <p class="text-slate-400 font-bold text-xl">No hay préstamos registrados aún.</p>
+                    <p class="text-slate-300">Comienza otorgando el primer crédito.</p>
                 </div>
             </div>
         </div>

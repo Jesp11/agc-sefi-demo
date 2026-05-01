@@ -1,7 +1,7 @@
 <?php
 
 use App\Http\Controllers\DashboardController;
-use App\Http\Controllers\CustomerController;
+use App\Http\Controllers\ClienteController;
 use App\Http\Controllers\LoanController;
 use App\Http\Controllers\LoanProductController;
 use App\Http\Controllers\PaymentController;
@@ -15,8 +15,8 @@ Route::get('/', function () {
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
 
-    Route::get('/customers/export-pdf', [CustomerController::class, 'exportPdf'])->name('customers.export-pdf');
-    Route::resource('customers', CustomerController::class);
+    Route::get('/customers/export-pdf', [ClienteController::class, 'exportPdf'])->name('customers.export-pdf');
+    Route::resource('customers', ClienteController::class);
 
     Route::resource('loans', LoanController::class);
     Route::get('/loans/{loan}/export-pdf', [LoanController::class, 'exportPdf'])->name('loans.export-pdf');

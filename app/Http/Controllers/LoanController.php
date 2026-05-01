@@ -2,10 +2,10 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Customer;
-use App\Models\Loan;
-use App\Models\Installment;
-use App\Models\LoanProduct;
+use App\Models\Cliente;
+use App\Models\Credito;
+use App\Models\Asesor;
+use App\Models\Pago;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Carbon\Carbon;
@@ -16,121 +16,77 @@ class LoanController extends Controller
 {
     public function index(Request $request)
     {
-        // Eager load customer and specifically the first pending installment
-        $query = Loan::with(['customer', 'installments' => function($q) {
-            $q->where('status', 'pending')->orderBy('installment_number', 'asc')->limit(1);
-        }]);
+        $query = Credito::with(['cliente', 'asesor']);
         
         if ($search = $request->query('search')) {
             $query->where(function($q) use ($search) {
-                $q->where('id', 'like', "%{$search}%")
-                  ->orWhereHas('customer', function($c) use ($search) {
-                      $c->where('name', 'like', "%{$search}%");
+                $q->where('id_credito', 'like', "%{$search}%")
+                  ->orWhereHas('cliente', function($c) use ($search) {
+                      $c->where('nombre', 'like', "%{$search}%");
                   });
             });
         }
-        
-        if ($status = $request->query('status')) {
-            if ($status !== 'all') {
-                $query->where('status', $status);
-            }
-        }
 
         return Inertia::render('Loans/Index', [
-            'loans' => $query->orderBy('created_at', 'desc')->get()->map(function($loan) {
-                $loanArray = $loan->toArray();
-                $first = $loan->installments->first();
-                if ($first) {
-                    $loanArray['next_installment'] = [
-                        'due_date' => Carbon::parse($first->due_date)->format('d/m/Y'),
-                        'amount' => $first->amount,
-                    ];
-                } else {
-                    $loanArray['next_installment'] = null;
-                }
-                unset($loanArray['installments']);
-                return $loanArray;
+            'loans' => $query->orderBy('fecha', 'desc')->get()->map(function($loan) {
+                return [
+                    'id' => $loan->id_credito,
+                    'customer' => $loan->cliente,
+                    'amount' => $loan->monto_otorgado,
+                    'total' => $loan->total,
+                    'fecha' => $loan->fecha ? Carbon::parse($loan->fecha)->format('d/m/Y') : 'N/A',
+                    'ciclo' => $loan->ciclo,
+                    'plazo' => $loan->plazo,
+                    'asesor' => $loan->asesor ? $loan->asesor->nombre : 'Sin asesor',
+                ];
             }),
-            'filters' => $request->only(['search', 'status'])
+            'filters' => $request->only(['search'])
         ]);
     }
 
-    public function exportPdf(Loan $loan)
+    public function exportPdf(Credito $loan)
     {
-        $loan->load(['customer', 'installments', 'payments']);
+        $loan->load(['cliente', 'pagos', 'asesor']);
         
         $pdf = Pdf::loadView('pdf.loan-details', compact('loan'));
         
-        return $pdf->download("Prestamo_{$loan->id}_{$loan->customer->name}.pdf");
+        return $pdf->download("Prestamo_{$loan->id_credito}_{$loan->cliente->nombre}.pdf");
     }
 
     public function create()
     {
         return Inertia::render('Loans/Create', [
-            'customers' => Customer::orderBy('name')->get(),
-            'products' => LoanProduct::where('is_active', true)->orderBy('name')->get()
+            'customers' => Cliente::orderBy('nombre')->get(),
+            'asesores' => Asesor::orderBy('nombre')->get(),
         ]);
     }
 
-    public function show(Loan $loan)
+    public function show(Credito $loan)
     {
         return Inertia::render('Loans/Show', [
-            'loan' => $loan->load(['customer', 'installments', 'payments'])
+            'loan' => $loan->load(['cliente', 'pagos', 'asesor'])
         ]);
     }
 
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'customer_id' => 'required|exists:customers,id',
-            'amount' => 'required|numeric|min:0.01',
-            'interest_rate' => 'required|numeric|min:0',
-            'periodicity' => 'required|in:semanal,quincenal,mensual',
-            'num_installments' => 'required|integer|min:1',
-            'first_payment_date' => 'required|date',
-            'promissory_note_folio' => 'nullable|string',
+            'id_cliente' => 'required|exists:clientes,id_cliente',
+            'monto_otorgado' => 'required|numeric|min:0',
+            'interes' => 'required|numeric|min:0',
+            'plazo' => 'required|integer|min:1',
+            'fecha' => 'required|date',
+            'id_asesor' => 'nullable|exists:asesores,id_asesor',
+            'ciclo' => 'nullable|integer',
+            'dias_pago' => 'nullable|integer',
+            'num_prog' => 'nullable|integer',
+            'valor_ficha' => 'nullable|numeric',
         ]);
 
-        return DB::transaction(function () use ($validated) {
-            // Simple interest calculation (Interés Global)
-            $interest = ($validated['amount'] * $validated['interest_rate']) / 100;
-            $totalAmount = $validated['amount'] + $interest;
-            $installmentAmount = round($totalAmount / $validated['num_installments'], 2);
+        $validated['total'] = $validated['monto_otorgado'] + $validated['interes'];
 
-            $loan = Loan::create([
-                'customer_id' => $validated['customer_id'],
-                'amount' => $validated['amount'],
-                'interest_rate' => $validated['interest_rate'],
-                'periodicity' => $validated['periodicity'],
-                'num_installments' => $validated['num_installments'],
-                'first_payment_date' => $validated['first_payment_date'],
-                'promissory_note_folio' => $validated['promissory_note_folio'],
-                'status' => 'active',
-                'outstanding_balance' => $totalAmount,
-            ]);
+        $loan = Credito::create($validated);
 
-            $dueDate = Carbon::parse($validated['first_payment_date']);
-
-            for ($i = 1; $i <= $validated['num_installments']; $i++) {
-                Installment::create([
-                    'loan_id' => $loan->id,
-                    'installment_number' => $i,
-                    'due_date' => $dueDate->toDateString(),
-                    'amount' => $installmentAmount,
-                    'status' => 'pending',
-                ]);
-
-                // Update date based on periodicity
-                if ($validated['periodicity'] === 'semanal') {
-                    $dueDate->addDays(7);
-                } elseif ($validated['periodicity'] === 'quincenal') {
-                    $dueDate->addDays(14);
-                } elseif ($validated['periodicity'] === 'mensual') {
-                    $dueDate->addMonth();
-                }
-            }
-
-            return redirect()->route('loans.show', $loan->id)->with('success', 'Préstamo creado con éxito.');
-        });
+        return redirect()->route('loans.index')->with('success', 'Crédito creado con éxito.');
     }
 }
