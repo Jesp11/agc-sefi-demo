@@ -6,58 +6,93 @@
     <style>
         body {
             font-family: 'Helvetica', 'Arial', sans-serif;
-            color: #334155;
-            line-height: 1.5;
+            color: #1e293b;
+            line-height: 1.4;
             font-size: 11px;
             margin: 0;
-            padding: 40px;
+            padding: 30px;
         }
         .header {
-            padding: 10px 0;
-            border-bottom: 2px solid #0d9488;
-            margin-bottom: 30px;
+            margin-bottom: 25px;
+            border-bottom: 1px solid #e2e8f0;
+            padding-bottom: 15px;
         }
         .business-name {
             font-size: 24px;
             font-weight: bold;
-            color: #0f172a;
             margin: 0;
+            color: #0f172a;
+            letter-spacing: -0.5px;
         }
         .doc-type {
-            font-size: 14px;
+            font-size: 10px;
             color: #64748b;
             text-transform: uppercase;
+            letter-spacing: 2px;
+            font-weight: bold;
+            margin-top: 2px;
+        }
+        .meta-right {
+            text-align: right;
+            font-size: 9px;
+            color: #94a3b8;
+            font-weight: bold;
+            text-transform: uppercase;
             letter-spacing: 1px;
+        }
+        .subject-header {
+            margin-bottom: 25px;
+            margin-top: 20px;
+        }
+        .subject-name {
+            font-size: 20px;
+            font-weight: 800;
+            color: #0f172a;
+            margin-bottom: 2px;
+        }
+        .subject-sub {
+            font-size: 9px;
+            font-weight: bold;
+            color: #94a3b8;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+        }
+        .section-title {
+            font-size: 11px;
+            font-weight: bold;
+            color: #0f172a;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 15px;
+            border-left: 4px solid #0f172a;
+            padding-left: 10px;
+            margin-top: 30px;
         }
         table.data-table {
             width: 100%;
             border-collapse: collapse;
-            margin-bottom: 30px;
         }
         table.data-table th {
-            background-color: #f8fafc;
-            border-bottom: 1px solid #e2e8f0;
-            padding: 10px;
             text-align: left;
-            font-size: 9px;
-            text-transform: uppercase;
+            padding: 10px 8px;
+            background-color: #f8fafc;
             color: #64748b;
+            font-size: 8px;
+            text-transform: uppercase;
+            border-bottom: 2px solid #e2e8f0;
         }
         table.data-table td {
-            padding: 10px;
+            padding: 10px 8px;
             border-bottom: 1px solid #f1f5f9;
             font-size: 10px;
         }
         .footer {
-            position: fixed;
-            bottom: 30px;
-            left: 40px;
-            right: 40px;
+            margin-top: 50px;
             text-align: center;
-            font-size: 10px;
+            font-size: 9px;
             color: #94a3b8;
-            padding-top: 15px;
-            border-top: 1px solid #e2e8f0;
+            border-top: 1px solid #f1f5f9;
+            padding-top: 20px;
         }
     </style>
 </head>
@@ -67,47 +102,54 @@
             <tr>
                 <td>
                     <h1 class="business-name">AGC Servicios Financieros</h1>
-                    <span class="doc-type">Directorio de Clientes</span>
+                    <div class="doc-type">Directorio General de Clientes</div>
                 </td>
-                <td align="right" style="font-size: 10px; color: #64748b;">
-                    <div>Fecha: {{ date('d/m/Y') }}</div>
-                    <div>Registros: {{ count($customers) }}</div>
+                <td class="meta-right">
+                    BASE DE DATOS OPERATIVA<br>
+                    <span style="color: #cbd5e1;">Generado: {{ date('d/m/Y H:i') }}</span>
                 </td>
             </tr>
         </table>
     </div>
 
+    <div class="subject-header">
+        <div class="subject-name">Base de Datos de Acreditados</div>
+        <div class="subject-sub">TOTAL DE REGISTROS: {{ count($customers) }} CLIENTES ACTIVOS</div>
+    </div>
+
+    <div class="section-title">Listado de Carteras</div>
     <table class="data-table">
         <thead>
             <tr>
                 <th width="30">ID</th>
                 <th>Nombre del Cliente</th>
-                <th>Domicilio Principal</th>
+                <th>Domicilio</th>
                 <th width="80">Teléfono</th>
                 <th width="40" align="center">Ciclo</th>
-                <th width="70">Ocupación</th>
+                <th width="100">Asesor Responsable</th>
             </tr>
         </thead>
         <tbody>
             @foreach($customers as $customer)
             <tr>
-                <td style="font-family: monospace; color: #94a3b8;">#{{ $customer->id_cliente }}</td>
+                <td style="color: #94a3b8;">#{{ $customer->id_cliente }}</td>
                 <td style="font-weight: bold; color: #0f172a;">{{ $customer->nombre }}</td>
-                <td style="font-size: 9px;">
-                    {{ $customer->direcciones->firstWhere('pivot.tipo', 'casa')->direccion ?? '---' }}
+                <td style="font-size: 9px; color: #64748b;">
+                    {{ $customer->direcciones->firstWhere('pivot.tipo', 'casa')->direccion ?? 'Sin dirección' }}
                 </td>
                 <td style="font-weight: bold;">{{ $customer->telefono ?: '---' }}</td>
-                <td align="center" style="font-weight: bold; color: #0f172a;">
-                    {{ $customer->creditos->max('ciclo') ?? 0 }}
+                <td align="center" style="font-weight: bold; color: #6366f1;">
+                    {{ $customer->creditos->max('ciclo') ?? 1 }}
                 </td>
-                <td style="color: #64748b; font-style: italic;">{{ $customer->ocupacion ?: '---' }}</td>
+                <td style="font-size: 9px; font-weight: bold;">{{ $customer->asesor ? $customer->asesor->nombre : 'GENERAL' }}</td>
             </tr>
             @endforeach
         </tbody>
     </table>
 
     <div class="footer">
-        Confidencial - Uso interno exclusivo de AGC Servicios Financieros. Generado el {{ date('d/m/Y H:i') }}.
+        <b>CONFIDENCIAL - AGC Servicios Financieros</b>
+        <br>Este documento es para uso interno exclusivo de la administración.
     </div>
 </body>
 </html>

@@ -2,7 +2,7 @@
 <html>
 <head>
     <meta charset="utf-8">
-    <title>Expediente Administrativo - {{ $loan->cliente->nombre }}</title>
+    <title>Estado de Cuenta - {{ $loan->cliente->nombre }}</title>
     <style>
         body {
             font-family: 'Helvetica', 'Arial', sans-serif;
@@ -18,7 +18,7 @@
             padding-bottom: 15px;
         }
         .business-name {
-            font-size: 24px;
+            font-size: 22px;
             font-weight: bold;
             margin: 0;
             color: #0f172a;
@@ -90,26 +90,6 @@
             padding-left: 10px;
             margin-top: 30px;
         }
-        .info-grid {
-            width: 100%;
-            margin-bottom: 20px;
-        }
-        .info-grid td {
-            padding: 12px 0;
-            border-bottom: 1px solid #f1f5f9;
-        }
-        .info-label {
-            font-size: 9px;
-            color: #94a3b8;
-            text-transform: uppercase;
-            font-weight: bold;
-            margin-bottom: 2px;
-        }
-        .info-value {
-            font-size: 11px;
-            font-weight: bold;
-            color: #0f172a;
-        }
         table.data-table {
             width: 100%;
             border-collapse: collapse;
@@ -128,6 +108,17 @@
             border-bottom: 1px solid #f1f5f9;
             font-size: 10px;
         }
+        .status-badge {
+            padding: 3px 8px;
+            border-radius: 6px;
+            font-size: 8px;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+        .status-paid { background-color: #dcfce7; color: #166534; }
+        .status-partial { background-color: #fef9c3; color: #854d0e; }
+        .status-pending { background-color: #fee2e2; color: #991b1b; }
+        
         .footer {
             margin-top: 50px;
             text-align: center;
@@ -144,10 +135,10 @@
             <tr>
                 <td>
                     <h1 class="business-name">AGC Servicios Financieros</h1>
-                    <div class="doc-type">Expediente Administrativo Digital</div>
+                    <div class="doc-type">Estado de Cuenta de Cliente</div>
                 </td>
                 <td class="meta-right">
-                    SISTEMA DE GESTIÓN DE CARTERA<br>
+                    SOPORTE AL CLIENTE<br>
                     <span style="color: #cbd5e1;">Generado: {{ date('d/m/Y H:i') }}</span>
                 </td>
             </tr>
@@ -156,7 +147,7 @@
 
     <div class="subject-header">
         <div class="subject-name">{{ $loan->cliente->nombre }}</div>
-        <div class="subject-sub">CRÉDITO OPERATIVO #{{ $loan->id_credito }} | CICLO {{ $loan->ciclo }}</div>
+        <div class="subject-sub">REF. CRÉDITO #{{ $loan->id_credito }} | CICLO {{ $loan->ciclo }}</div>
     </div>
 
     <div class="kpi-container">
@@ -164,19 +155,19 @@
             <tr>
                 <td width="33%">
                     <div class="kpi-box">
-                        <div class="kpi-label">Capital Otorgado</div>
-                        <div class="kpi-value">${{ number_format($loan->monto_otorgado, 2) }}</div>
+                        <div class="kpi-label">Monto a Liquidar</div>
+                        <div class="kpi-value">${{ number_format($loan->total, 2) }}</div>
                     </div>
                 </td>
                 <td width="33%">
                     <div class="kpi-box" style="border-color: #dcfce7; background-color: #f0fdf4;">
-                        <div class="kpi-label" style="color: #10b981;">Total Recuperado</div>
+                        <div class="kpi-label" style="color: #10b981;">Total Pagado</div>
                         <div class="kpi-value" style="color: #059669;">${{ number_format($loan->pagos->sum('monto'), 2) }}</div>
                     </div>
                 </td>
                 <td width="33%">
                     <div class="kpi-box" style="border-color: #fee2e2; background-color: #fef2f2;">
-                        <div class="kpi-label" style="color: #ef4444;">Saldo en Cartera</div>
+                        <div class="kpi-label" style="color: #ef4444;">Saldo Restante</div>
                         <div class="kpi-value" style="color: #b91c1c;">${{ number_format($loan->total - $loan->pagos->sum('monto'), 2) }}</div>
                     </div>
                 </td>
@@ -184,51 +175,77 @@
         </table>
     </div>
 
-    <div class="section-title">Detalles del Contrato</div>
-    <table class="info-grid">
-        <tr>
-            <td width="25%"><div class="info-label">Asesor Responsable</div><div class="info-value">{{ $loan->asesor ? $loan->asesor->nombre : 'GENERAL' }}</div></td>
-            <td width="25%"><div class="info-label">Fecha Apertura</div><div class="info-value">{{ \Carbon\Carbon::parse($loan->fecha)->format('d/m/Y') }}</div></td>
-            <td width="25%"><div class="info-label">Plazo Pactado</div><div class="info-value">{{ $loan->plazo }} Semanas</div></td>
-            <td width="25%"><div class="info-label">Cuota Semanal</div><div class="info-value" style="color: #059669;">${{ number_format($loan->valor_ficha, 2) }}</div></td>
-        </tr>
-        <tr>
-            <td><div class="info-label">Monto con Interés</div><div class="info-value">${{ number_format($loan->total, 2) }}</div></td>
-            <td><div class="info-label">Interés Total</div><div class="info-value">${{ number_format($loan->interes, 2) }}</div></td>
-            <td><div class="info-label">ID Sistema</div><div class="info-value">#{{ $loan->id_credito }}</div></td>
-            <td><div class="info-label">Estatus</div><div class="info-value" style="color: #6366f1;">{{ $loan->pagos->sum('monto') >= $loan->total ? 'COMPLETADO' : 'VIGENTE' }}</div></td>
-        </tr>
-    </table>
-
-    <div class="section-title">Análisis de Recuperación</div>
+    <div class="section-title">Tabla de Amortización</div>
     <table class="data-table">
         <thead>
             <tr>
-                <th>Folio</th>
-                <th>Fecha y Hora</th>
-                <th>Concepto</th>
-                <th align="right">Monto Recibido</th>
+                <th width="30">No.</th>
+                <th>Fecha Límite</th>
+                <th align="right">Cuota Sugerida</th>
+                <th align="center">Estatus</th>
             </tr>
         </thead>
         <tbody>
-            @forelse($loan->pagos->sortByDesc('fecha_pago') as $pago)
+            @php
+                $total_paid = $loan->pagos->sum('monto');
+                $remaining = $total_paid;
+                $startDate = \Carbon\Carbon::parse($loan->fecha);
+            @endphp
+            @for($i = 1; $i <= $loan->plazo; $i++)
+                @php
+                    $paymentDate = $startDate->copy()->addWeeks($i);
+                    $status = 'pending';
+                    $statusText = 'Pendiente';
+
+                    if ($remaining >= $loan->valor_ficha) {
+                        $status = 'paid';
+                        $statusText = 'Pagado';
+                        $remaining -= $loan->valor_ficha;
+                    } elseif ($remaining > 0) {
+                        $status = 'partial';
+                        $statusText = 'Abono: $' . number_format($remaining, 2);
+                        $remaining = 0;
+                    }
+                @endphp
+                <tr>
+                    <td align="center"><b>{{ $i }}</b></td>
+                    <td>{{ $paymentDate->format('d/m/Y') }}</td>
+                    <td align="right"><b>${{ number_format($loan->valor_ficha, 2) }}</b></td>
+                    <td align="center">
+                        <span class="status-badge status-{{ $status }}">{{ $statusText }}</span>
+                    </td>
+                </tr>
+            @endfor
+        </tbody>
+    </table>
+
+    <div class="section-title">Historial de Operaciones</div>
+    <table class="data-table">
+        <thead>
             <tr>
-                <td>#{{ $pago->id_pago }}</td>
+                <th>Fecha de Pago</th>
+                <th>Concepto</th>
+                <th align="right">Monto</th>
+            </tr>
+        </thead>
+        <tbody>
+            @forelse($loan->pagos->sortByDesc('fecha_pago')->take(10) as $pago)
+            <tr>
                 <td>{{ \Carbon\Carbon::parse($pago->fecha_pago)->format('d/m/Y H:i') }}</td>
-                <td>Abono a capital e interés</td>
+                <td>Abono realizado</td>
                 <td align="right" style="color: #059669; font-weight: bold;">${{ number_format($pago->monto, 2) }}</td>
             </tr>
             @empty
             <tr>
-                <td colspan="4" align="center" style="padding: 20px; color: #94a3b8; font-style: italic;">Sin movimientos registrados.</td>
+                <td colspan="3" align="center" style="padding: 20px; color: #94a3b8; font-style: italic;">Aún no se registran pagos.</td>
             </tr>
             @endforelse
         </tbody>
     </table>
 
     <div class="footer">
-        <b>CONTROL INTERNO CONFIDENCIAL - AGC Servicios Financieros</b>
-        <br>Documento generado por el sistema de gestión operativa.
+        <b>AGC Servicios Financieros - Creciendo Juntos</b>
+        <br>Este documento es para fines informativos y soporte al cliente.
     </div>
 </body>
 </html>

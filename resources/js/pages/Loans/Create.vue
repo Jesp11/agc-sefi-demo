@@ -1,46 +1,38 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import { Head, useForm, Link } from '@inertiajs/vue3';
-import { Calculator, Calendar, Landmark, Info, ChevronDown, ArrowLeft, Package } from 'lucide-vue-next';
+import { Calculator, Calendar, Landmark, Info, ChevronDown, ArrowLeft, Package, CreditCard, Save, Clock, DollarSign } from 'lucide-vue-next';
 import loanRoutes from '@/routes/loans';
 import { dashboard as dashboardRoute } from '@/routes';
 import AppLayout from '@/layouts/AppLayout.vue';
 import type { BreadcrumbItem } from '@/types';
 
 const props = defineProps<{
-    customers: Array<{ id: number; name: string }>;
+    customers: Array<{ id: number; name: string; last_cycle: number; id_asesor: number | null }>;
+    asesores: Array<{ id: number; name: string }>;
     products: Array<any>;
 }>();
 
 const selectedProductId = ref('');
 
 const applyProductTemplate = () => {
-    if (!selectedProductId.value) {
-        return; // maintain existing manual values if they switch back to manual
-    }
+    if (!selectedProductId.value) return;
     const product = props.products.find(p => p.id.toString() === selectedProductId.value);
     if (product) {
-        form.amount = product.amount.toString();
-        form.interest_rate = product.interest_rate.toString();
-        const freqMap: Record<string, string> = {
-            'daily': 'diario',
-            'weekly': 'semanal',
-            'fortnightly': 'quincenal',
-            'monthly': 'mensual'
-        };
-        form.periodicity = freqMap[product.frequency] || 'semanal';
-        form.num_installments = product.duration.toString();
+        form.monto_otorgado = product.amount.toString();
+        form.plazo = product.duration.toString();
     }
 };
 
 const form = useForm({
-    customer_id: '',
-    amount: '',
-    interest_rate: '',
-    periodicity: 'semanal',
-    num_installments: '',
-    first_payment_date: new Date().toISOString().split('T')[0],
-    promissory_note_folio: '',
+    id_cliente: '',
+    monto_otorgado: '',
+    interes: 0,
+    plazo: '0', // Default changed to 0 as requested
+    fecha: new Date().toISOString().split('T')[0],
+    id_asesor: '',
+    ciclo: '1',
+    valor_ficha: '', 
 });
 
 // Searchable Customer Dropdown Logic
@@ -53,10 +45,18 @@ const filteredCustomers = computed(() => {
     return props.customers.filter(c => c.name.toLowerCase().includes(term));
 });
 
-const selectCustomer = (customer: { id: number; name: string }) => {
-    form.customer_id = customer.id.toString();
+const selectCustomer = (customer: { id: number; name: string; last_cycle: number; id_asesor: number | null }) => {
+    form.id_cliente = customer.id.toString();
     customerSearch.value = customer.name;
     showCustomerDropdown.value = false;
+    
+    // Auto-increment cycle based on customer's last cycle
+    form.ciclo = (customer.last_cycle + 1).toString();
+
+    // Auto-fill advisor if customer has one assigned
+    if (customer.id_asesor) {
+        form.id_asesor = customer.id_asesor.toString();
+    }
 };
 
 // Close dropdown when clicking outside
@@ -64,26 +64,42 @@ const closeDropdown = () => { showCustomerDropdown.value = false; };
 onMounted(() => document.addEventListener('click', closeDropdown));
 onUnmounted(() => document.removeEventListener('click', closeDropdown));
 
-// Simple preview calculation
-const preview = computed(() => {
-    if (!form.amount || !form.interest_rate || !form.num_installments) return null;
+// Auto-calculate Valor Ficha based on the 100/1000 rule
+watch(() => form.monto_otorgado, (newVal) => {
+    if (newVal) {
+        const principal = parseFloat(newVal);
+        const autoFicha = (principal / 1000) * 100;
+        form.valor_ficha = autoFicha.toString();
+    }
+});
+
+// Final values calculation
+const totals = computed(() => {
+    const ficha = parseFloat(form.valor_ficha) || 0;
+    const plazo = parseInt(form.plazo) || 0;
+    const monto = parseFloat(form.monto_otorgado) || 0;
     
-    const principal = parseFloat(form.amount);
-    const rate = parseFloat(form.interest_rate);
-    const installments = parseInt(form.num_installments);
-    
-    const interest = (principal * rate) / 100;
-    const total = principal + interest;
-    const amountPerInstallment = total / installments;
+    const total = ficha * plazo;
+    const interes = total - monto;
     
     return {
         total,
-        interest,
-        amountPerInstallment
+        interes
     };
 });
 
+// Day of week calculation
+const dayOfWeek = computed(() => {
+    if (!form.fecha) return '';
+    const date = new Date(form.fecha + 'T12:00:00'); 
+    const days = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+    return days[date.getDay()];
+});
+
 const submit = () => {
+    // Sync calculated interest to form before submission
+    form.interes = totals.value.interes;
+    
     form.post(loanRoutes.store().url, {
         onSuccess: () => form.reset(),
     });
@@ -92,7 +108,7 @@ const submit = () => {
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Dashboard', href: dashboardRoute().url },
     { title: 'Préstamos', href: loanRoutes.index().url },
-    { title: 'Nuevo Préstamo', href: loanRoutes.create().url },
+    { title: 'Nueva Apertura', href: '#' },
 ];
 
 const formatCurrency = (value: number) => {
@@ -107,213 +123,198 @@ const formatCurrency = (value: number) => {
     <Head title="Nuevo Préstamo" />
 
     <AppLayout :breadcrumbs="breadcrumbs">
-        <div class="p-6 max-w-5xl mx-auto">
-            <header class="mb-8">
-                <Link 
-                    :href="loanRoutes.index().url"
-                    class="inline-flex items-center text-sm font-bold text-slate-500 hover:text-slate-900 transition-colors mb-4"
-                >
-                    <ArrowLeft :size="16" class="mr-2" />
-                    Volver a Cartera
-                </Link>
-                <h1 class="text-3xl font-bold text-slate-900 tracking-tight">Crear Nuevo Préstamo</h1>
-                <p class="text-slate-500 text-lg">Configura las condiciones del crédito para el cliente</p>
+        <div class="max-w-6xl mx-auto p-8 lg:p-12 bg-white min-h-screen shadow-sm border-x border-slate-100">
+            <!-- Professional Header -->
+            <header class="flex items-center justify-between gap-6 mb-16 pb-8 border-b border-slate-200">
+                <div class="flex items-center gap-6">
+                    <Link 
+                        :href="loanRoutes.index().url" 
+                        class="text-slate-400 hover:text-slate-900 transition-colors"
+                    >
+                        <ArrowLeft :size="24" />
+                    </Link>
+                    <div>
+                        <p class="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1">Nueva Operación</p>
+                        <h1 class="text-3xl font-bold text-slate-900 tracking-tight">Apertura de Crédito</h1>
+                    </div>
+                </div>
+                <div class="flex items-center gap-4">
+                    <Link 
+                        :href="loanRoutes.index().url"
+                        class="text-xs font-bold text-slate-500 hover:text-slate-900 px-4"
+                    >
+                        Cancelar
+                    </Link>
+                    <button 
+                        @click="submit"
+                        :disabled="form.processing"
+                        class="px-8 py-3 bg-slate-900 text-white text-xs font-bold rounded-lg hover:bg-slate-800 transition-all flex items-center gap-2 disabled:opacity-50"
+                    >
+                        <Save :size="16" />
+                        {{ form.processing ? 'Procesando...' : 'Finalizar Registro' }}
+                    </button>
+                </div>
             </header>
 
-            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-16">
                 <!-- Form -->
-                <div class="lg:col-span-2 space-y-6">
-                    <form @submit.prevent="submit" class="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm space-y-6">
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <!-- Product Template -->
-                            <div class="md:col-span-2" v-if="products && products.length > 0">
-                                <label class="block text-sm font-bold text-slate-700 mb-2">Producto Preferido (Plantilla)</label>
-                                <div class="relative">
-                                    <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-indigo-500">
-                                        <Package :size="20" stroke-width="2" />
-                                    </div>
-                                    <select
-                                        v-model="selectedProductId"
-                                        @change="applyProductTemplate"
-                                        class="w-full pl-12 pr-10 py-3 bg-indigo-50/50 border border-indigo-100 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-indigo-900 font-bold appearance-none cursor-pointer hover:border-indigo-200"
-                                    >
-                                        <option value="">Personalizado (Captura Manual)</option>
-                                        <option v-for="prod in products" :key="prod.id" :value="prod.id.toString()">
-                                            {{ prod.name }} ({{ formatCurrency(prod.amount) }} al {{ prod.interest_rate }}%)
-                                        </option>
-                                    </select>
-                                    <div class="absolute inset-y-0 right-0 flex items-center pr-4 pointer-events-none text-indigo-400">
-                                        <ChevronDown :size="20" stroke-width="2" />
-                                    </div>
-                                </div>
-                            </div>
+                <div class="lg:col-span-2 space-y-12">
+                    
+                    <!-- Section: Cliente y Asesor -->
+                    <section class="space-y-8">
+                        <div class="flex items-center gap-2 border-b border-slate-100 pb-2">
+                            <Package :size="18" class="text-slate-400" />
+                            <h2 class="text-xs font-bold text-slate-400 uppercase tracking-widest">Configuración Base</h2>
+                        </div>
 
-                            <div class="md:col-span-2 pt-2 border-t border-slate-100">
-                                <label class="block text-sm font-bold text-slate-700 mb-2">Cliente</label>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                            <div class="md:col-span-2 space-y-2">
+                                <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1">Seleccionar Acreditado</label>
                                 <div class="relative" @click.stop>
                                     <input
                                         type="text"
                                         v-model="customerSearch"
                                         @focus="showCustomerDropdown = true"
-                                        placeholder="Buscar o seleccionar cliente..."
-                                        class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-teal-500 outline-none transition-all placeholder:text-slate-400"
+                                        placeholder="Buscar por nombre..."
+                                        class="w-full px-4 py-3 bg-slate-50 border border-slate-200 focus:border-slate-900 focus:bg-white rounded-lg outline-none transition-all text-sm font-semibold"
                                     />
-                                    <!-- Hidden input to enforce required validation -->
-                                    <input type="hidden" v-model="form.customer_id" required>
+                                    <input type="hidden" v-model="form.id_cliente" required>
+                                    <ChevronDown class="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" :size="16" />
                                     
-                                    <ChevronDown 
-                                        class="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 cursor-pointer transition-transform" 
-                                        :class="{'rotate-180': showCustomerDropdown}"
-                                        @click="showCustomerDropdown = !showCustomerDropdown"
-                                        :size="20" 
-                                    />
-                                    
-                                    <!-- Dropdown List -->
-                                    <div v-if="showCustomerDropdown" class="absolute z-50 w-full mt-2 bg-white border border-slate-100 shadow-xl rounded-xl max-h-60 overflow-y-auto custom-scrollbar">
+                                    <div v-if="showCustomerDropdown" class="absolute z-50 w-full mt-2 bg-white border border-slate-100 shadow-xl rounded-xl max-h-60 overflow-y-auto">
                                         <div 
                                             v-for="customer in filteredCustomers" 
                                             :key="customer.id"
                                             @click="selectCustomer(customer)"
-                                            :class="['px-5 py-3 cursor-pointer text-sm font-medium transition-colors border-b border-slate-50 last:border-0', form.customer_id == customer.id.toString() ? 'bg-teal-50 text-teal-700' : 'hover:bg-slate-50 text-slate-700']"
+                                            :class="['px-5 py-3 cursor-pointer text-sm font-medium border-b border-slate-50 last:border-0', form.id_cliente == customer.id.toString() ? 'bg-slate-900 text-white' : 'hover:bg-slate-50 text-slate-700']"
                                         >
                                             {{ customer.name }}
-                                        </div>
-                                        <div v-if="filteredCustomers.length === 0" class="px-5 py-6 text-center text-sm text-slate-400 italic">
-                                            No se encontraron clientes coincidentes
                                         </div>
                                     </div>
                                 </div>
                             </div>
 
-                            <div>
-                                <label class="block text-sm font-bold text-slate-700 mb-2">Monto Entregado ($)</label>
-                                <input 
-                                    v-model="form.amount"
-                                    type="number" 
-                                    step="0.01"
-                                    required
-                                    class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-teal-500 outline-none transition-all"
-                                    placeholder="0.00"
-                                />
-                            </div>
-
-                            <div>
-                                <label class="block text-sm font-bold text-slate-700 mb-2">Tasa de Interés (%)</label>
+                            <div class="space-y-2">
+                                <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1">Asesor Responsable</label>
                                 <div class="relative">
-                                    <input 
-                                        v-model="form.interest_rate"
-                                        type="number" 
-                                        step="0.01"
-                                        required
-                                        class="w-full px-4 py-3 pr-12 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-teal-500 outline-none transition-all"
-                                        placeholder="0.00"
-                                    />
-                                    <span class="absolute right-8 top-1/2 -translate-y-1/2 font-bold text-slate-400 pointer-events-none">%</span>
-                                </div>
-                            </div>
-
-                            <div>
-                                <label class="block text-sm font-bold text-slate-700 mb-2">Periodicidad</label>
-                                <div class="relative">
-                                    <select 
-                                        v-model="form.periodicity"
-                                        class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-teal-500 outline-none transition-all appearance-none pr-10"
-                                    >
-                                        <option value="semanal">Semanal</option>
-                                        <option value="quincenal">Quincenal</option>
-                                        <option value="mensual">Mensual</option>
+                                    <select v-model="form.id_asesor" class="w-full px-4 py-3 bg-slate-50 border border-slate-200 focus:border-slate-900 focus:bg-white rounded-lg outline-none transition-all text-sm font-semibold appearance-none pr-10">
+                                        <option value="">Seleccionar Asesor</option>
+                                        <option v-for="asesor in asesores" :key="asesor.id" :value="asesor.id">{{ asesor.name }}</option>
                                     </select>
-                                    <ChevronDown class="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" :size="20" />
+                                    <ChevronDown class="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" :size="16" />
                                 </div>
                             </div>
 
-                            <div>
-                                <label class="block text-sm font-bold text-slate-700 mb-2">Número de Cuotas</label>
-                                <input 
-                                    v-model="form.num_installments"
-                                    type="number" 
-                                    required
-                                    class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-teal-500 outline-none transition-all"
-                                    placeholder="Ej. 12"
-                                />
-                            </div>
-
-                            <div>
-                                <label class="block text-sm font-bold text-slate-700 mb-2">Fecha de Primer Pago</label>
-                                <input 
-                                    v-model="form.first_payment_date"
-                                    type="date" 
-                                    required
-                                    class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-teal-500 outline-none transition-all"
-                                />
-                            </div>
-
-                            <div>
-                                <label class="block text-sm font-bold text-slate-700 mb-2">Folio de Pagaré</label>
-                                <input 
-                                    v-model="form.promissory_note_folio"
-                                    type="text"
-                                    class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-teal-500 outline-none transition-all"
-                                    placeholder="S-001"
-                                />
+                            <div class="space-y-2">
+                                <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1">Ciclo del Crédito</label>
+                                <input v-model="form.ciclo" type="number" class="w-full px-4 py-3 bg-slate-50 border border-slate-200 focus:border-slate-900 focus:bg-white rounded-lg outline-none transition-all text-sm font-semibold" />
                             </div>
                         </div>
+                    </section>
 
-                        <div class="pt-6">
-                            <button 
-                                type="submit" 
-                                :disabled="form.processing"
-                                class="w-full py-4 bg-slate-900 text-white font-bold rounded-2xl hover:bg-slate-800 transition-all shadow-xl shadow-slate-200 disabled:opacity-50 flex items-center justify-center gap-2"
-                            >
-                                <Landmark :size="20" />
-                                {{ form.processing ? 'Procesando...' : 'Crear Préstamo y Generar Tabla' }}
-                            </button>
+                    <!-- Section: Condiciones Financieras -->
+                    <section class="space-y-8">
+                        <div class="flex items-center gap-2 border-b border-slate-100 pb-2">
+                            <Landmark :size="18" class="text-slate-400" />
+                            <h2 class="text-xs font-bold text-slate-400 uppercase tracking-widest">Condiciones del Crédito</h2>
                         </div>
-                    </form>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                            <div class="space-y-2">
+                                <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1">Monto Otorgado</label>
+                                <div class="relative">
+                                    <span class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold">$</span>
+                                    <input v-model="form.monto_otorgado" type="number" step="0.01" class="w-full pl-8 pr-4 py-3 bg-slate-50 border border-slate-200 focus:border-slate-900 focus:bg-white rounded-lg outline-none transition-all text-sm font-semibold" />
+                                </div>
+                            </div>
+
+                            <div class="space-y-2">
+                                <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1">Valor Ficha (Pago Semanal)</label>
+                                <div class="relative">
+                                    <span class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold">$</span>
+                                    <input v-model="form.valor_ficha" type="number" step="0.01" class="w-full pl-8 pr-4 py-3 bg-white border-2 border-slate-900/10 focus:border-slate-900 rounded-lg outline-none transition-all text-sm font-bold text-slate-900" />
+                                </div>
+                                <p class="text-[9px] text-slate-400 font-bold uppercase mt-1 pl-1 italic">* Sugerido: 100 por cada 1000</p>
+                            </div>
+                            
+                            <div class="space-y-2">
+                                <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1">Número de Plazos (Semanas)</label>
+                                <input v-model="form.plazo" type="number" class="w-full px-4 py-3 bg-slate-50 border border-slate-200 focus:border-slate-900 focus:bg-white rounded-lg outline-none transition-all text-sm font-semibold" />
+                            </div>
+
+                            <div class="space-y-2">
+                                <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1">Fecha de Desembolso</label>
+                                <div class="relative">
+                                    <input v-model="form.fecha" type="date" class="w-full px-4 py-3 bg-slate-50 border border-slate-200 focus:border-slate-900 focus:bg-white rounded-lg outline-none transition-all text-sm font-semibold" />
+                                    <div class="absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-2 pointer-events-none">
+                                        <span class="text-[10px] font-bold text-slate-400 uppercase bg-slate-100 px-2 py-0.5 rounded">{{ dayOfWeek }}</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            </div>
+                    </section>
                 </div>
 
                 <!-- Preview Sidebar -->
-                <div class="space-y-6">
-                    <div class="bg-teal-600 text-white p-8 rounded-3xl shadow-xl shadow-teal-100 sticky top-6">
-                        <h3 class="text-xl font-bold mb-6 flex items-center gap-2">
-                            <Calculator :size="24" />
-                            Resumen del Crédito
-                        </h3>
+                <aside class="space-y-8 sticky top-8 self-start">
+                    <div class="bg-slate-900 text-white p-8 rounded-2xl shadow-lg">
+                        <div class="flex items-center gap-3 mb-8 opacity-60">
+                            <Calculator :size="20" />
+                            <h3 class="text-[10px] font-bold uppercase tracking-widest">Resumen de Apertura</h3>
+                        </div>
 
-                        <div v-if="preview" class="space-y-6">
-                            <div class="pb-6 border-b border-teal-500/30">
-                                <p class="text-teal-100 text-xs font-bold uppercase tracking-widest mb-1">Monto Total a Pagar</p>
-                                <p class="text-4xl font-extrabold">{{ formatCurrency(preview.total) }}</p>
+                        <div v-if="totals" class="space-y-8">
+                            <div>
+                                <p class="text-[10px] font-bold uppercase tracking-widest opacity-40 mb-1">Monto Total a Liquidar</p>
+                                <p class="text-3xl font-bold">{{ formatCurrency(totals.total) }}</p>
                             </div>
 
-                            <div class="grid grid-cols-2 gap-4">
-                                <div>
-                                    <p class="text-teal-100 text-xs font-bold uppercase tracking-widest mb-1">Interés (Global)</p>
-                                    <p class="text-lg font-bold">{{ formatCurrency(preview.interest) }}</p>
+                            <div class="grid grid-cols-1 gap-6 pt-6 border-t border-white/10">
+                                <div class="p-4 bg-white/5 rounded-xl border border-white/10">
+                                    <p class="text-[10px] font-bold uppercase tracking-widest opacity-40 mb-1">Ficha Semanal</p>
+                                    <p class="text-xl font-bold text-emerald-400">{{ formatCurrency(parseFloat(form.valor_ficha) || 0) }}</p>
+                                    <p class="text-[9px] font-medium opacity-60 mt-1">Día de pago: {{ dayOfWeek }}s</p>
                                 </div>
-                                <div>
-                                    <p class="text-teal-100 text-xs font-bold uppercase tracking-widest mb-1">Cuotas</p>
-                                    <p class="text-lg font-bold">{{ form.num_installments }}</p>
+                                <div class="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <p class="text-[10px] font-bold uppercase tracking-widest opacity-40 mb-1">Interés Total</p>
+                                        <p class="text-sm font-bold">{{ formatCurrency(totals.interes) }}</p>
+                                    </div>
+                                    <div>
+                                        <p class="text-[10px] font-bold uppercase tracking-widest opacity-40 mb-1">Plazos</p>
+                                        <p class="text-sm font-bold">{{ form.plazo }} Semanas</p>
+                                    </div>
                                 </div>
-                            </div>
-
-                            <div class="p-4 bg-teal-700/40 rounded-2xl border border-teal-500/20">
-                                <p class="text-teal-100 text-xs font-bold uppercase tracking-widest mb-1">Pago por Cuota</p>
-                                <p class="text-2xl font-bold">{{ formatCurrency(preview.amountPerInstallment) }}</p>
                             </div>
                         </div>
 
-                        <div v-else class="text-center py-12 text-teal-100/60 italic font-medium">
-                            <Info :size="32" class="mx-auto mb-4 opacity-30" />
-                            Ingresa el monto, tasa y cuotas para ver la proyección.
+                        <div v-else class="py-12 text-center opacity-40 italic space-y-4">
+                            <Info :size="32" class="mx-auto mb-2 opacity-20" />
+                            <p class="text-xs font-medium">Complete el monto y plazos para calcular la apertura.</p>
                         </div>
                     </div>
 
-                    <div class="p-6 bg-slate-50 rounded-2xl border border-slate-100 text-slate-500 text-sm">
-                        <p class="font-bold text-slate-700 mb-2">Nota sobre el cálculo:</p>
-                        <p>Esta es una proyección de validación. La tabla de amortización definitiva se generará tras la confirmación.</p>
+                    <div class="p-6 bg-slate-50 rounded-xl border border-slate-100 space-y-4">
+                        <h4 class="text-[10px] font-bold text-slate-900 uppercase tracking-widest flex items-center gap-2">
+                            <Clock :size="14" class="text-slate-400" /> Fórmula de Interés
+                        </h4>
+                        <div class="p-4 bg-white rounded border border-slate-100 space-y-2">
+                            <div class="flex justify-between items-center text-[10px]">
+                                <span class="text-slate-400 uppercase font-bold">Ficha x Plazos:</span>
+                                <span class="font-bold text-slate-900">{{ formatCurrency(totals.total) }}</span>
+                            </div>
+                            <div class="flex justify-between items-center text-[10px]">
+                                <span class="text-slate-400 uppercase font-bold">(-) Capital:</span>
+                                <span class="font-bold text-slate-900">{{ formatCurrency(parseFloat(form.monto_otorgado) || 0) }}</span>
+                            </div>
+                            <div class="pt-2 border-t border-slate-50 flex justify-between items-center">
+                                <span class="text-[10px] font-black text-slate-900 uppercase">(=) INTERÉS:</span>
+                                <span class="text-xs font-black text-slate-900">{{ formatCurrency(totals.interes) }}</span>
+                            </div>
+                        </div>
                     </div>
-                </div>
+                </aside>
             </div>
         </div>
     </AppLayout>

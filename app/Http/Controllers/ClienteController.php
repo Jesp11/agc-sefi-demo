@@ -6,6 +6,7 @@ use App\Models\Cliente;
 use App\Models\Direccion;
 use App\Models\Referencia;
 use App\Models\Aval;
+use App\Models\Asesor;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
@@ -16,19 +17,21 @@ class ClienteController extends Controller
     public function index()
     {
         return Inertia::render('Customers/Index', [
-            'customers' => Cliente::with(['direcciones', 'referencias', 'avales', 'creditos'])->get()
+            'customers' => Cliente::with(['direcciones', 'referencias', 'avales', 'creditos', 'asesor'])->get()
         ]);
     }
 
     public function create()
     {
-        return Inertia::render('Customers/Create');
+        return Inertia::render('Customers/Create', [
+            'asesores' => Asesor::orderBy('nombre')->get()
+        ]);
     }
 
     public function show(Cliente $customer)
     {
         return Inertia::render('Customers/Show', [
-            'customer' => $customer->load(['direcciones', 'referencias', 'avales', 'creditos.asesor'])
+            'customer' => $customer->load(['direcciones', 'referencias', 'avales', 'creditos.asesor', 'asesor'])
         ]);
     }
 
@@ -44,6 +47,7 @@ class ClienteController extends Controller
         $validated = $request->validate([
             // Cliente
             'nombre' => 'required|string|max:255',
+            'id_asesor' => 'nullable|exists:asesores,id_asesor',
             'curp' => 'nullable|string|max:50',
             'clave_elector' => 'nullable|string|max:50',
             'telefono' => 'nullable|string|max:20',
@@ -75,6 +79,7 @@ class ClienteController extends Controller
         DB::transaction(function () use ($validated) {
             $cliente = Cliente::create([
                 'nombre' => $validated['nombre'],
+                'id_asesor' => $validated['id_asesor'],
                 'curp' => $validated['curp'],
                 'clave_elector' => $validated['clave_elector'],
                 'telefono' => $validated['telefono'],
@@ -110,7 +115,8 @@ class ClienteController extends Controller
     public function edit(Cliente $customer)
     {
         return Inertia::render('Customers/Edit', [
-            'customer' => $customer->load(['direcciones', 'referencias', 'avales'])
+            'customer' => $customer->load(['direcciones', 'referencias', 'avales']),
+            'asesores' => Asesor::orderBy('nombre')->get()
         ]);
     }
 
@@ -118,6 +124,7 @@ class ClienteController extends Controller
     {
         $validated = $request->validate([
             'nombre' => 'required|string|max:255',
+            'id_asesor' => 'nullable|exists:asesores,id_asesor',
             'curp' => 'nullable|string|max:50',
             'clave_elector' => 'nullable|string|max:50',
             'telefono' => 'nullable|string|max:20',
@@ -149,6 +156,7 @@ class ClienteController extends Controller
         DB::transaction(function () use ($validated, $customer) {
             $customer->update([
                 'nombre' => $validated['nombre'],
+                'id_asesor' => $validated['id_asesor'],
                 'curp' => $validated['curp'],
                 'clave_elector' => $validated['clave_elector'],
                 'telefono' => $validated['telefono'],

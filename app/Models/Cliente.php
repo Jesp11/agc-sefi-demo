@@ -15,6 +15,7 @@ class Cliente extends Model
     protected $primaryKey = 'id_cliente';
 
     protected $fillable = [
+        'id_asesor',
         'nombre',
         'curp',
         'clave_elector',
@@ -42,5 +43,10 @@ class Cliente extends Model
     public function avales(): HasMany
     {
         return $this->hasMany(Aval::class, 'id_cliente', 'id_cliente');
+    }
+
+    public function asesor()
+    {
+        return $this->belongsTo(Asesor::class, 'id_asesor', 'id_asesor');
     }
 }

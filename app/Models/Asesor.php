@@ -21,4 +21,9 @@ class Asesor extends Model
     {
         return $this->hasMany(Credito::class, 'id_asesor', 'id_asesor');
     }
+
+    public function ahorros(): HasMany
+    {
+        return $this->hasMany(AhorroVoluntario::class, 'id_asesor', 'id_asesor');
+    }
 }

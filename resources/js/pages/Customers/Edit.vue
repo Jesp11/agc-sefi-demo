@@ -2,7 +2,7 @@
 import { Head, Link, useForm } from '@inertiajs/vue3';
 import { 
     ArrowLeft, Phone, User, MapPin, Users, ShieldCheck, 
-    Briefcase, Save, Plus, X, FileText
+    Briefcase, Save, Plus, X, FileText, ChevronDown
 } from 'lucide-vue-next';
 import { dashboard as dashboardRoute } from '@/routes';
 import customersRoutes from '@/routes/customers';
@@ -45,11 +45,14 @@ const props = defineProps<{
         direcciones: Direccion[];
         referencias: Referencia[];
         avales: Aval[];
-    }
+        id_asesor: number | null;
+    };
+    asesores: Array<{ id_asesor: number, nombre: string }>;
 }>();
 
 const form = useForm({
     nombre: props.customer.nombre,
+    id_asesor: props.customer.id_asesor,
     curp: props.customer.curp,
     clave_elector: props.customer.clave_elector,
     telefono: props.customer.telefono,
@@ -145,9 +148,23 @@ const breadcrumbs: BreadcrumbItem[] = [
                         <h2 class="text-xs font-bold text-slate-400 uppercase tracking-widest">Datos de Identidad</h2>
                     </div>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
-                        <div class="space-y-2">
-                            <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1">Nombre Completo</label>
-                            <input v-model="form.nombre" type="text" class="w-full px-4 py-3 bg-slate-50 border border-slate-200 focus:border-slate-900 focus:bg-white rounded-lg outline-none transition-all text-sm font-semibold" />
+                        <div class="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-8">
+                            <div class="space-y-2">
+                                <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1">Nombre Completo</label>
+                                <input v-model="form.nombre" type="text" class="w-full px-4 py-3 bg-slate-50 border border-slate-200 focus:border-slate-900 focus:bg-white rounded-lg outline-none transition-all text-sm font-semibold" />
+                            </div>
+                            <div class="space-y-2">
+                                <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1">Asesor Permanente</label>
+                                <div class="relative">
+                                    <select v-model="form.id_asesor" class="w-full px-4 py-3 bg-slate-50 border border-slate-200 focus:border-slate-900 focus:bg-white rounded-lg outline-none transition-all text-sm font-semibold appearance-none pr-10">
+                                        <option value="">Seleccionar Asesor</option>
+                                        <option v-for="asesor in asesores" :key="asesor.id_asesor" :value="asesor.id_asesor">
+                                            {{ asesor.nombre }}
+                                        </option>
+                                    </select>
+                                    <ChevronDown class="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" :size="16" />
+                                </div>
+                            </div>
                         </div>
                         <div class="space-y-2">
                             <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1">Teléfono</label>

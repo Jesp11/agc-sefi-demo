@@ -5,7 +5,6 @@ import { Users, CreditCard, Wallet, BarChart3, TrendingUp, AlertCircle, Calendar
 import customerRoutes from '@/routes/customers';
 import loanRoutes from '@/routes/loans';
 import { dashboard as dashboardRoute } from '@/routes';
-import reportRoutes from '@/routes/reports';
 
 defineProps<{
     metrics: {
@@ -110,7 +109,7 @@ const breadcrumbs = [
 
             <section class="mt-8">
                 <h2 class="text-sm font-bold text-slate-400 uppercase tracking-[0.3em] mb-8 text-center">Accesos Rápidos</h2>
-                <div class="grid grid-cols-2 lg:grid-cols-5 gap-8">
+                <div class="grid grid-cols-2 lg:grid-cols-3 gap-8">
                     <Link 
                         :href="loanRoutes.index().url"
                         class="flex flex-col items-center justify-center p-6 bg-white rounded-3xl border border-slate-100 shadow-sm hover:shadow-lg hover:shadow-amber-100/50 hover:border-amber-200 transition-all group"
@@ -139,26 +138,6 @@ const breadcrumbs = [
                             <CreditCard :size="32" stroke-width="1.5" />
                         </div>
                         <span class="text-sm font-bold text-slate-700 group-hover:text-blue-700 transition-colors text-center">Nuevo Préstamo</span>
-                    </Link>
-
-                    <Link 
-                        :href="reportRoutes.upcoming().url"
-                        class="flex flex-col items-center justify-center p-6 bg-white rounded-3xl border border-slate-100 shadow-sm hover:shadow-lg hover:shadow-fuchsia-100/50 hover:border-fuchsia-200 transition-all group"
-                    >
-                        <div class="p-4 bg-fuchsia-50 text-fuchsia-600 rounded-2xl group-hover:scale-110 group-hover:bg-fuchsia-600 group-hover:text-white transition-all mb-4">
-                            <Calendar :size="32" stroke-width="1.5" />
-                        </div>
-                        <span class="text-sm font-bold text-slate-700 group-hover:text-fuchsia-700 transition-colors text-center">Pagos Mañana</span>
-                    </Link>
-
-                    <Link 
-                        :href="reportRoutes.index().url"
-                        class="flex flex-col items-center justify-center p-6 bg-white rounded-3xl border border-slate-100 shadow-sm hover:shadow-lg hover:shadow-indigo-100/50 hover:border-indigo-200 transition-all group"
-                    >
-                        <div class="p-4 bg-indigo-50 text-indigo-600 rounded-2xl group-hover:scale-110 group-hover:bg-indigo-600 group-hover:text-white transition-all mb-4">
-                            <BarChart3 :size="32" stroke-width="1.5" />
-                        </div>
-                        <span class="text-sm font-bold text-slate-700 group-hover:text-indigo-700 transition-colors text-center">Métricas</span>
                     </Link>
                 </div>
             </section>

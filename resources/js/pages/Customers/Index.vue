@@ -55,7 +55,7 @@ const filteredCustomers = computed(() => {
     <Head title="Clientes" />
 
     <AppLayout :breadcrumbs="breadcrumbs">
-        <div class="max-w-[1400px] mx-auto p-8 lg:p-12">
+        <div class="w-full mx-auto p-8 lg:p-12">
             
             <!-- Header Minimalista -->
             <header class="flex items-center justify-between gap-8 mb-12">
@@ -96,8 +96,8 @@ const filteredCustomers = computed(() => {
             </div>
 
             <!-- Tabla de Datos -->
-            <div class="bg-white border border-slate-100 rounded-xl shadow-sm overflow-hidden min-h-[500px]">
-                <table class="w-full text-left border-collapse table-fixed">
+            <div class="bg-white border border-slate-100 rounded-xl shadow-sm overflow-x-auto min-h-[500px]">
+                <table class="w-full text-left border-collapse table-auto">
                     <thead>
                         <tr class="bg-slate-50/50 border-b border-slate-100">
                             <th class="w-20 px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">ID</th>
